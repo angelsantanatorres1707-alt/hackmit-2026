@@ -1,0 +1,77 @@
+{
+  "_comment": [
+    "The user's real homework. a = (1,2), b = (3,1), 'proj_a(b) = (b.a)a'.",
+    "Step 1 (b.a = 5) is CORRECT and is replayed as a component decomposition,",
+    "never as the perpendicular-foot picture -- in a projection problem that",
+    "foot IS the final answer, so the textbook rendering of a RIGHT step would",
+    "leak the answer (leak_guard names the downstream kind).",
+    "Step 2 forgets to divide by a.a, so 'scale a by 5' sends the arrow to",
+    "(5,10) -- 3.5x longer than the b it is supposed to be a shadow of.",
+    "Note what is NOT here: no correct_value of any kind. The scene cannot",
+    "leak an answer it was never given."
+  ],
+  "template": "StepReplay",
+  "params": {
+    "title": "Your steps, replayed",
+    "hint": "a shadow can't be longer than the thing casting it",
+    "student_label": "YOUR WORK",
+
+    "canvas": {
+      "box": [9.5, 6.05],
+      "box_center": [-1.85, -0.30],
+      "ledger_x": 4.95,
+      "zoom_max": 2.6,
+      "pad": 0.9,
+      "margin": 0.55,
+      "grow": false
+    },
+
+    "givens": {
+      "a": {"kind": "vector", "value": [1, 2], "display": "(1, 2)", "color": "i_hat"},
+      "b": {"kind": "vector", "value": [3, 1], "display": "(3, 1)", "color": "j_hat"}
+    },
+
+    "leak_guard": ["project"],
+
+    "steps": [
+      {
+        "id": "s1",
+        "student_label": "1)",
+        "kind": "dot_product",
+        "expr": "b.a = 3(1) + 1(2) = 5",
+        "args": {"u": "b", "v": "a"},
+        "terms": ["3(1)", "1(2)"],
+        "result": {"kind": "scalar", "value": 5, "display": "5"},
+        "bind": "k",
+        "status": "ok",
+        "first_wrong": false,
+        "run_time": 2.4,
+        "invariant": null,
+        "divergence": null
+      },
+      {
+        "id": "s2",
+        "student_label": "2)",
+        "kind": "scale_vector",
+        "expr": "proj_a(b) = 5(1,2) = (5,10)",
+        "args": {"k": "k", "v": "a"},
+        "result": {"kind": "vector", "value": [5, 10], "display": "(5, 10)"},
+        "bind": "p",
+        "status": "wrong",
+        "first_wrong": true,
+        "run_time": 3.0,
+        "invariant": {
+          "kind": "disc",
+          "radius_of": "b",
+          "caption": "every shadow of b lands in here"
+        },
+        "divergence": {
+          "absurdity": "length",
+          "compare_to": "b",
+          "residual_from": "b",
+          "right_angle_at": "result"
+        }
+      }
+    ]
+  }
+}

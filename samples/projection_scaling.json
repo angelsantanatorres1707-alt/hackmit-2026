@@ -1,0 +1,203 @@
+{
+  "document": {
+    "page_count": 1,
+    "legibility": "usable",
+    "orientation_ok": true,
+    "multiple_problems_detected": false,
+    "notes": null
+  },
+  "problem": {
+    "present": true,
+    "statement": "Let a = (1,2) and b = (3,1). Find proj_a(b), the projection of b onto a.",
+    "topic": "projection",
+    "asks_for": "proj_a(b)",
+    "confidence": 0.93,
+    "givens": [
+      {
+        "symbol": "a",
+        "object": {
+          "kind": "vector",
+          "shape": [
+            1,
+            2
+          ],
+          "orientation": "unspecified",
+          "rows": [
+            [
+              1,
+              2
+            ]
+          ],
+          "exact": null,
+          "scalars": null,
+          "exact_scalars": null,
+          "var": null,
+          "text": null,
+          "wrote_decimals": false
+        },
+        "source": "printed",
+        "ambiguities": [],
+        "alternates": [],
+        "confidence": 0.98
+      },
+      {
+        "symbol": "b",
+        "object": {
+          "kind": "vector",
+          "shape": [
+            1,
+            2
+          ],
+          "orientation": "unspecified",
+          "rows": [
+            [
+              3,
+              1
+            ]
+          ],
+          "exact": null,
+          "scalars": null,
+          "exact_scalars": null,
+          "var": null,
+          "text": null,
+          "wrote_decimals": false
+        },
+        "source": "printed",
+        "ambiguities": [],
+        "alternates": [],
+        "confidence": 0.98
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "student_label": "1)",
+      "page": 1,
+      "reading_order": 1,
+      "bbox": {
+        "x": 160,
+        "y": 470,
+        "w": 690,
+        "h": 150
+      },
+      "raw_text": "b . a = 3(1) + 1(2) = 5",
+      "claimed_expression": "b . a",
+      "claimed_operation": "dot",
+      "op_args": {
+        "rows": null,
+        "scalar": null,
+        "source_symbols": [
+          "b",
+          "a"
+        ],
+        "note": null
+      },
+      "value": {
+        "kind": "scalar",
+        "shape": null,
+        "orientation": null,
+        "rows": null,
+        "exact": null,
+        "scalars": [
+          5
+        ],
+        "exact_scalars": null,
+        "var": null,
+        "text": null,
+        "wrote_decimals": false
+      },
+      "alternates": [],
+      "ambiguities": [],
+      "crossed_out": false,
+      "is_final_answer": false,
+      "parse_ok": true,
+      "confidence": 0.96,
+      "confidence_reason": null
+    },
+    {
+      "id": "s2",
+      "student_label": "2)",
+      "page": 1,
+      "reading_order": 2,
+      "bbox": {
+        "x": 160,
+        "y": 660,
+        "w": 690,
+        "h": 150
+      },
+      "raw_text": "proj_a(b) = 5(1,2) = (5,10)",
+      "claimed_expression": "proj_a(b)",
+      "claimed_operation": "project",
+      "op_args": {
+        "rows": null,
+        "scalar": null,
+        "source_symbols": [
+          "b",
+          "a"
+        ],
+        "note": null
+      },
+      "value": {
+        "kind": "vector",
+        "shape": [
+          1,
+          2
+        ],
+        "orientation": "unspecified",
+        "rows": [
+          [
+            5,
+            10
+          ]
+        ],
+        "exact": null,
+        "scalars": null,
+        "exact_scalars": null,
+        "var": null,
+        "text": null,
+        "wrote_decimals": false
+      },
+      "alternates": [],
+      "ambiguities": [],
+      "crossed_out": false,
+      "is_final_answer": true,
+      "parse_ok": true,
+      "confidence": 0.94,
+      "confidence_reason": null
+    }
+  ],
+  "final_answer": {
+    "step_id": "s2",
+    "object": {
+      "kind": "vector",
+      "shape": [
+        1,
+        2
+      ],
+      "orientation": "unspecified",
+      "rows": [
+        [
+          5,
+          10
+        ]
+      ],
+      "exact": null,
+      "scalars": null,
+      "exact_scalars": null,
+      "var": null,
+      "text": null,
+      "wrote_decimals": false
+    }
+  },
+  "extraction": {
+    "unreadable_regions": [],
+    "warnings": []
+  },
+  "_meta": {
+    "title": "Projection - scaled a by the dot product, never divided by a.a",
+    "error_id": null,
+    "topic": "projection",
+    "expect": "first_error at s2; StepReplay replays s1 (sound) then s2, where the arrow shoots past b"
+  }
+}

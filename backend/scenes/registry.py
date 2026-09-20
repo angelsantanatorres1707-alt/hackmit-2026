@@ -35,6 +35,7 @@ from grid_transform import GridTransformCompare  # noqa: E402
 from line_system import LineSystemCompare  # noqa: E402
 from span_compare import SpanCompare  # noqa: E402
 from step_focus import StaticStepHighlight  # noqa: E402
+from step_replay import StepReplay  # noqa: E402
 from vector_op import VectorOpCompare  # noqa: E402
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -207,6 +208,35 @@ TEMPLATES: dict[str, dict[str, Any]] = {
             "ambient": (_L, "2 | 3"),
             "title": (_L, "str"),
             "hint": (_L, "str"),
+        },
+    },
+    # -- T8 ------------------------------------------------------------
+    # The only template that replays the student's REASONING rather than
+    # summarising its endpoint. Try it FIRST whenever there are >= 2 parsed
+    # steps and at least two of them carry geometry; the seven templates
+    # above become the fallback tier. See docs/STEP_REPLAY.md.
+    "StepReplay": {
+        "class": StepReplay,
+        "module": "step_replay",
+        "file": os.path.join(_HERE, "step_replay.py"),
+        "scene": "StepReplay",
+        "priority": "P0",
+        "duration": 15.4,
+        "covers": ["any multi-step solution", "LA11", "LA19", "LA02", "LA12"],
+        "summary": "Replay the student's own steps, in order, on one canvas: "
+                   "each step's geometry driven by their own parsed numbers, "
+                   "going wrong where their reasoning does.",
+        "param_schema": {
+            "givens": (_S, "symbol -> {kind,value,display,color}"),
+            "steps": (_S, "ordered list; see docs/STEP_REPLAY.md section 3. "
+                          "Each: {id,student_label,kind,expr,args,result,bind,"
+                          "status,first_wrong,run_time,invariant,divergence}"),
+            "canvas": (_S, "framing block {box,box_center,pad,margin,zoom_max}; "
+                           "the solver fills it"),
+            "leak_guard": (_S, "list[str] of kinds present DOWNSTREAM"),
+            "title": (_L, "str"),
+            "student_label": (_L, "str, the ledger rail heading"),
+            "hint": (_L, "str, positional only -- see check_hint"),
         },
     },
 }

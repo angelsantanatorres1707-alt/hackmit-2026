@@ -161,7 +161,7 @@ DEFAULT_RUN_TIME = {
     "matrix_product": 2.6, "row_op": 2.0, "normalize": 1.6, "project": 2.2,
 }
 
-BUDGET, BUDGET_CEILING, RT_FLOOR = 16.5, 20.0, 0.4
+BUDGET, BUDGET_CEILING, RT_FLOOR = 17.0, 20.0, 0.4
 MAX_LEDGER_LINES = 7
 
 
@@ -213,7 +213,13 @@ def _is_number(x: Any) -> bool:
 
 def _vec2(value, name: str) -> np.ndarray:
     v = as_vector(value, name=name, dim=None)
-    return np.array([float(v[0]), float(v[1])], dtype=float)
+    v = np.array([float(v[0]), float(v[1])], dtype=float)
+    # as_vector checks finiteness but not magnitude (as_matrix does); past
+    # about 50 there is no framing that keeps the givens legible alongside it.
+    if float(np.max(np.abs(v))) > 50.0:
+        raise SceneParamError(
+            f"{name}: component magnitude > 50, will not fit on screen")
+    return v
 
 
 # ---------------------------------------------------------------------------
@@ -441,8 +447,11 @@ class StepReplay(ParamScene):
                 if g["kind"] == "vector"]
         spts = [np.array(s["result"]["value"], float) for s in clean
                 if s["result"]["kind"] == "vector"]
-        u_end, _ = _frame_for(gpts + spts, box, BOX_C_D, pad, margin)
-        u_start, _ = _frame_for(gpts or spts, box, BOX_C_D, pad, margin)
+        # Unclipped on purpose: the UNIT_FLOOR clamp would otherwise hide the
+        # very blow-out this guard exists to catch.
+        u_end, _ = _frame_for(gpts + spts, box, BOX_C_D, pad, margin, clip=False)
+        u_start, _ = _frame_for(gpts or spts, box, BOX_C_D, pad, margin,
+                                clip=False)
         ratio = u_start / max(u_end, 1e-9)
         if ratio > 40.0:
             raise SceneParamError(
@@ -507,11 +516,23 @@ class StepReplay(ParamScene):
     @staticmethod
     def _fit_budget(steps: list[dict]) -> None:
         """Target 12-18s, hard ceiling 20s.  The first wrong step's beat is
-        NEVER compressed -- it is the only beat the video exists for."""
-        fixed = 1.5 + 1.2 + 1.8 + 0.55 * len(steps)
-        wrong = sum(s["run_time"] for s in steps if s["first_wrong"])
+        NEVER compressed -- it is the only beat the video exists for.
+
+        The overhead model is measured, not guessed: every step pays for its
+        ledger line and its mark, an invariant costs a beat plus its hold, and
+        the wrong step pays for three divergence cues.  A model that counted
+        only run_times under-predicted a five-step replay by six seconds.
+        """
+        fixed = 1.2 + 1.0 + 1.7                  # givens in, hint, final hold
+        for s in steps:
+            fixed += 0.62 + 0.35                 # ledger line + tick/caret
+            if s.get("invariant"):
+                fixed += 1.25
+            if s["first_wrong"]:
+                fixed += 3.45                    # caret + the three cues
+        wrong = sum(s["run_time"] * 1.15 for s in steps if s["first_wrong"])
         rest_steps = [s for s in steps if not s["first_wrong"]]
-        rest = sum(s["run_time"] for s in rest_steps)
+        rest = sum(s["run_time"] * 1.15 for s in rest_steps)
         if fixed + wrong + rest <= BUDGET:
             return
         avail = BUDGET - fixed - wrong
@@ -1078,9 +1099,11 @@ class StepReplay(ParamScene):
         rt = float(st["run_time"])
 
         # --- components lit up on the axes (never a perpendicular) ----
-        def comps(vec, color):
+        def comps(vec, color, nudge=0.0):
+            # The two vectors' x-legs both start at the origin and would
+            # overprint each other, so the second set is nudged clear.
             g = VGroup()
-            o = self.origin
+            o = self.origin + np.array([0.0, nudge, 0.0])
             px = o + self.unit * np.array([float(vec[0]), 0.0, 0.0])
             py = px + self.unit * np.array([0.0, float(vec[1]), 0.0])
             for a, b, val in ((o, px, vec[0]), (px, py, vec[1])):
@@ -1100,7 +1123,7 @@ class StepReplay(ParamScene):
                 g.add(ln, t)
             return g
 
-        gu, gv = comps(U, ru.color), comps(V, rv.color)
+        gu, gv = comps(U, ru.color, 0.075), comps(V, rv.color, -0.075)
         self.transient.add(gu, gv)
         self._play1([Create(gu)], min(0.65, rt * 0.26))
         self.play(Create(gv), run_time=min(0.55, rt * 0.22))
@@ -1146,9 +1169,12 @@ class StepReplay(ParamScene):
             bars.add(r, lab)
             cursor += w
         bars.set_z_index(Z_GEO)
-        end_tick = DashedLine(np.array([cursor, y_terms - 0.16, 0.0]),
-                              np.array([cursor, y_sum - 0.20, 0.0]),
-                              color=GHOST, stroke_width=2.4, dash_length=0.08)
+        # The plumb line from where the parts end down to where the total
+        # ends: if the student's arithmetic is off, the two visibly disagree.
+        end_tick = DashedLine(np.array([cursor, y_terms - 0.14, 0.0]),
+                              np.array([cursor, y_sum - 0.22, 0.0]),
+                              color=CORRECT, stroke_width=3.2, dash_length=0.08)
+        end_tick.set_stroke(opacity=0.95)
         end_tick.set_z_index(Z_GEO)
 
         sum_w = max(0.03, abs(claimed) * bu)
@@ -1543,32 +1569,29 @@ class StepReplay(ParamScene):
                 self.play(Create(arc), run_time=0.6)
 
                 # The arc lands ON the claim's own ray, so a gap drawn along
-                # that ray would be hidden underneath the arrow.  Offset the
-                # measurement sideways instead: a caliper showing how far the
-                # object's OWN length reaches along the claim, with the rest
-                # of the arrow left over in plain sight.
+                # that ray hides underneath the arrow (and beside it, it is
+                # too thin to read).  Lay the object's own length ON the
+                # claim instead: however far |compare_to| gets you, the rest
+                # of the arrow is left over in plain sight.
                 foot = self.pt(claim * (r / nc))
                 dirc = np.array([claim[0], claim[1], 0.0]) / nc
                 perp = np.array([-dirc[1], dirc[0], 0.0])
                 cdir = np.array([C[0], C[1], 0.0])
                 side = -1.0 if float(np.dot(perp, cdir)) > 0 else 1.0
-                off = 0.36 * perp * side
-                rail = DashedLine(self.origin + off, foot + off, color=PROBE,
-                                  stroke_width=3.4, dash_length=0.1)
-                cross = Line(foot - 0.19 * perp, foot + 0.19 * perp,
-                             color=PROBE, stroke_width=5.0)
-                stub_a = Line(self.origin, self.origin + off, color=PROBE,
-                              stroke_width=2.0).set_stroke(opacity=0.7)
-                stub_b = Line(foot, foot + off, color=PROBE,
-                              stroke_width=2.0).set_stroke(opacity=0.7)
-                tag = T(f"|{d.get('compare_to')}|", font_size=22, color=PROBE)
+                laid = Line(self.origin, foot, color=PROBE, stroke_width=11.0)
+                laid.set_stroke(opacity=0.95)
+                cap = Line(foot - 0.26 * perp, foot + 0.26 * perp,
+                           color=PROBE, stroke_width=6.0)
+                tag = T(f"|{d.get('compare_to')}|", font_size=26, color=PROBE,
+                        weight="BOLD")
                 tag.move_to(self._clamp_in_box(
-                    (self.origin + foot) / 2 + off * 2.6, tag))
-                grp = VGroup(rail, cross, stub_a, stub_b, tag)
-                grp.set_z_index(Z_GEO)
+                    (self.origin + foot) / 2 + 0.46 * perp * side
+                    + 0.5 * tag.width * perp * side, tag))
+                grp = VGroup(laid, cap, tag)
+                grp.set_z_index(Z_GEO + 1)
                 cmob.add(arc, grp)
-                self.play(Create(rail), Create(cross), FadeIn(stub_a),
-                          FadeIn(stub_b), FadeIn(tag), run_time=0.55)
+                self.play(Create(laid), Create(cap), FadeIn(tag),
+                          run_time=0.55)
 
         # Cue 3: THE PROPERTY FAILS.  Last, never first -- TEMPLATE_AUDIT row
         # 8 already found the corner marker reads as nothing on its own, so
@@ -1628,7 +1651,7 @@ def _left_align(mob: VMobject) -> VMobject:
 
 
 def _frame_for(points, box, box_center, pad: float, margin: float,
-               cap: float | None = None):
+               cap: float | None = None, clip: bool = True):
     """bbox of every point visited so far -> (unit, origin in scene coords).
 
     Two things this does that a plain ``fit_unit`` does not, both necessary:
@@ -1647,7 +1670,8 @@ def _frame_for(points, box, box_center, pad: float, margin: float,
     lo, hi = P.min(axis=0) - pad, P.max(axis=0) + pad
     span = np.maximum(hi - lo, 1e-6)
     unit = min((box[0] - 2 * margin) / span[0], (box[1] - 2 * margin) / span[1])
-    unit = float(np.clip(unit, UNIT_FLOOR, UNIT_CEIL))
+    if clip:
+        unit = float(np.clip(unit, UNIT_FLOOR, UNIT_CEIL))
     if cap is not None:
         unit = min(unit, float(cap))
     mid = (lo + hi) / 2
