@@ -19,6 +19,7 @@ from typing import Any, Optional
 
 import sympy as sp
 
+from . import replay_route
 from .extract import Extraction
 from .verify import Val, Verdict, _col, val_json
 
@@ -404,6 +405,12 @@ class Plan:
     forbidden_values: list[str] = field(default_factory=list)
     fallback: Optional[dict[str, Any]] = None   # {"template":..., "params":...}
     notes: list[str] = field(default_factory=list)
+    # Present whenever the scene is a StepReplay: the ordered step list with a
+    # time window each, so the frontend can show which step the video is on.
+    replay: Optional[dict[str, Any]] = None
+    # Rungs below `fallback`, so demoting a comparison template under StepReplay
+    # keeps StaticStepHighlight as the never-raises bottom of the ladder.
+    fallbacks: list[dict[str, Any]] = field(default_factory=list)
 
     def json(self) -> dict:
         return {
@@ -411,6 +418,7 @@ class Plan:
             "params": self.params,
             "hint": self.hint,
             "fallback": self.fallback,
+            "fallbacks": self.fallbacks,
             "notes": self.notes,
         }
 
@@ -510,7 +518,67 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
             fb_params.setdefault("title", params["title"])
             fallback = {"template": "StaticStepHighlight", "params": fb_params}
 
-    return Plan(template, params, hint, forbidden, fallback, notes)
+    # ---------------------------------------------------------------------
+    # StepReplay is the DEFAULT. Everything above is the fallback tier.
+    #
+    # The seven comparison templates summarise where the student's work ENDED
+    # UP: one before/after of their final claim beside the correct one. They
+    # never replay the reasoning that got there, which is what the student
+    # asked to see. When a replay can be built from the steps they actually
+    # wrote, it wins, and the comparison we just built becomes the rung below
+    # it. When it cannot, nothing here changes and the old ladder runs.
+    # ---------------------------------------------------------------------
+    replay = replay_route.build(ext, verdict, student_label="YOUR WORK")
+    replay_block = None
+    deeper: list[dict[str, Any]] = []
+    if replay["ok"]:
+        r_params = replay["params"]
+        r_full, r_short = _replay_hint(replay["caption"], eid, ref)
+        r_problems = lint_hint(r_full, forbidden, allowed) + lint_hint(r_short, forbidden, allowed)
+        if r_problems:
+            notes.extend(f"replay hint: {p}" for p in r_problems)
+            r_full = f"Watch the highlighted part of {ref}."
+            r_short = "watch the step the caret marks"
+        r_params["hint"] = r_short
+        r_params.setdefault("student_label", "YOUR WORK")
+        r_params["title"] = "Your work, replayed step by step"
+        # The comparison plan built above is the fallback: a real animation,
+        # and a better rung than the static sheet when a replay cannot render.
+        # The static sheet stays underneath it as the bottom of the ladder.
+        if fallback is not None:
+            deeper = [fallback]
+        fallback = {"template": template, "params": params}
+        replay_block = replay_route.replay_view(r_params, replay["result"], hint=r_full)
+        notes.append(
+            f"StepReplay: replaying {replay_block['step_count']} of the student's own "
+            f"steps ({replay_block['motion_steps']} with geometry); "
+            f"{template} demoted to fallback"
+        )
+        notes.extend(f"replay: {w}" for w in replay["warnings"])
+        template, params, hint = "StepReplay", r_params, r_full
+    elif replay["reason"]:
+        notes.append(f"no StepReplay ({replay['reason']}); used {template}")
+
+    return Plan(template, params, hint, forbidden, fallback, notes,
+                replay_block, deeper)
+
+
+def _replay_hint(caption: str, eid: Optional[str], ref: str) -> tuple[str, str]:
+    """(sentence for the student, caption burned into the replay frame).
+
+    The caption comes from the compiler and names what the replay actually
+    draws, so it beats the comparison bank's wording, which describes two
+    panels a replay does not have. The bank's full sentence is still the better
+    prose when the taxonomy matched, and both are linted by the caller.
+    """
+    short = " ".join((caption or "").split())
+    if not short:
+        return "", ""
+    bank = HINTS.get(eid or "")
+    if bank:
+        return bank[0].format(step=ref), short
+    body = (short[0].upper() + short[1:]).rstrip(".")
+    return f"{body}. Watch it happen in {ref}.", short
 
 
 class SceneUnavailable(Exception):

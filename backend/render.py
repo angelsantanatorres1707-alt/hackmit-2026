@@ -313,8 +313,15 @@ def render_with_fallback(plan: dict, *, quality: str = QUALITY, timeout: float =
     attempts: list[dict[str, Any]] = [
         {"template": plan.get("template"), "params": plan.get("params") or {}}
     ]
-    fb = plan.get("fallback")
-    if isinstance(fb, dict) and fb.get("template") and fb.get("template") != plan.get("template"):
+    # ``fallback`` is the next rung; ``fallbacks`` is the rest of the ladder
+    # below it, which a StepReplay plan uses to keep StaticStepHighlight as the
+    # never-raises bottom under the comparison template it demoted.
+    rungs = [plan.get("fallback")] + list(plan.get("fallbacks") or [])
+    for fb in rungs:
+        if not isinstance(fb, dict) or not fb.get("template"):
+            continue
+        if any(fb["template"] == a["template"] for a in attempts):
+            continue
         attempts.append({"template": fb["template"], "params": fb.get("params") or {}})
 
     errors: list[str] = []

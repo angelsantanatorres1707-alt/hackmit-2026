@@ -28,6 +28,13 @@
     "name": "la19_projection"
   },
   {
+    "title": "Projection - scaled a by the dot product, never divided by a.a",
+    "error_id": null,
+    "topic": "projection",
+    "expect": "first_error at s2; no taxonomy signature; StepReplay replays s1 (sound) then s2, where the arrow shoots past b",
+    "name": "projection_scaling"
+  },
+  {
     "title": "Compute AB - one dot product cut short",
     "error_id": null,
     "topic": "matrix_multiply",

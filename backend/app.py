@@ -207,6 +207,10 @@ def analyze_extraction(ext: Extraction, meta: dict, *, wait: bool, quality: Opti
         "hint": plan.hint,
         "scene_template": plan.template,
         "scene_params": plan.params,
+        # Present when the scene replays the student's own steps: the ordered
+        # step list with a time window each, so the player can highlight the
+        # line the video is currently on. None means a comparison template.
+        "replay": getattr(plan, "replay", None),
         "warnings": list(ext.extraction.warnings) + list(meta.get("notes") or []),
         "notes": plan.notes + verdict.notes,
         "video_url": f"/api/video/{job_id}",

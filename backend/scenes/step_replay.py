@@ -18,6 +18,13 @@ Divergence is shown by drawing the INVARIANT the operation must satisfy (a
 region, computable from the givens alone) BEFORE the claim lands, then letting
 the claim miss it. See docs/STEP_REPLAY.md sections 5 and 6.
 
+On REVEAL_CORRECT_VALUES / ``reveal_correct_values()``: this scene deliberately
+never calls it. The other templates receive a correct value and mask it with
+``MASK`` when the flag is off; StepReplay is stricter -- its param schema has
+no slot for one, so there is nothing on the canvas to mask and nothing the flag
+could turn back on. Every number that reaches the screen came from ``givens``
+or from ``steps[*].result``, i.e. from the student's own paper.
+
 Standalone render:
     .venv/bin/manim -qm --disable_caching -v ERROR --media_dir /tmp/sr \\
         backend/scenes/step_replay.py StepReplay
@@ -563,6 +570,7 @@ class StepReplay(ParamScene):
         self.live: list[Live] = []
         self.transient = VGroup()
         self._extra: list = []
+        self._inv_holders: list[list] = []
         self._frame_target: tuple[float, np.ndarray] | None = None
 
         # -- solve the framing ------------------------------------------
@@ -822,11 +830,17 @@ class StepReplay(ParamScene):
     def _res_vec(self, st) -> np.ndarray:
         return np.asarray(st["result"]["value"], float).flatten()[:2]
 
-    def _track_overlay(self, mob, build) -> None:
-        """Register a panel-coordinate overlay so a later re-frame moves it."""
+    def _track_overlay(self, mob, build) -> list:
+        """Register a panel-coordinate overlay so a later re-frame moves it.
+
+        Returns its holder: set ``holder[0] = None`` when the overlay is faded
+        out, or the next re-frame's ``Transform`` puts it straight back on the
+        canvas.
+        """
         holder = [mob]
         self.live.append(Live((lambda h=holder: h[0]),
                               (lambda u, o, b=build: b(u, o))))
+        return holder
 
     # ------------------------------------------------------------------
     # The ledger rail
@@ -953,6 +967,18 @@ class StepReplay(ParamScene):
     # region constrains the answer without ever being the answer.
     # ------------------------------------------------------------------
     def _invariant(self, inv: dict) -> None:
+        # The previous step's region was a claim about the previous step's
+        # values; once those have moved it is no longer true, and two stacked
+        # circles say nothing. Retire it, and drop its Live entry too or the
+        # next re-frame's Transform puts it straight back.
+        if self._inv_holders:
+            stale = [h[0] for h in self._inv_holders if h[0] is not None]
+            for h in self._inv_holders:
+                h[0] = None
+            self._inv_holders = []
+            if stale:
+                self._extra.append(FadeOut(VGroup(*stale)))
+
         kind = str(inv.get("kind") or "disc")
         mobs = VGroup()
         if kind in ("disc", "circle"):
@@ -969,7 +995,7 @@ class StepReplay(ParamScene):
                 c.set_z_index(Z_GEO - 3)
                 return c
             disc = build_disc(self.unit, self.origin)
-            self._track_overlay(disc, build_disc)
+            self._inv_holders.append(self._track_overlay(disc, build_disc))
             mobs.add(disc)
         elif kind == "unit_circle":
             def build_unit(u, o):
@@ -978,7 +1004,7 @@ class StepReplay(ParamScene):
                 c.set_z_index(Z_GEO)
                 return c
             uc = build_unit(self.unit, self.origin)
-            self._track_overlay(uc, build_unit)
+            self._inv_holders.append(self._track_overlay(uc, build_unit))
             mobs.add(uc)
         elif kind == "line":
             v = self._vecval(inv.get("along_of") or inv.get("radius_of"))
