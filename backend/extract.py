@@ -571,16 +571,37 @@ def prepare(data: bytes, *, max_edge: int | None = None) -> tuple[bytes, str, tu
 NUM = re.compile(r"-?\d+(?:\.\d+)?")
 
 
+def _derivable(nums: list[float]) -> set[float]:
+    """Results a student could reach by combining two numbers written side by side.
+
+    Row reduction is written as PENDING ARITHMETIC: "R2 = [-3 -3  -2 + 3 | 13 - 12]".
+    The evaluated row -- -6, 1, 1 -- is by definition made of numbers that are not
+    literally on the page, so a guard that only looks for literal digits flags a
+    PERFECT transcription of every row operation a student has ever written.
+
+    So count what the written numbers can produce, not just the written numbers.
+    Adjacent pairs under + - * covers how row arithmetic is actually laid out,
+    without needing to know which spacing groups with which.
+    """
+    out: set[float] = set()
+    for a, b in zip(nums, nums[1:]):
+        out.update((abs(a + b), abs(a - b), abs(b - a), abs(a * b)))
+    return out
+
+
 def silent_correction_suspected(step: Step) -> bool:
-    """value contains a number the pen never wrote -> the model computed something."""
+    """value contains a number the pen never wrote AND could not have worked out."""
     if not step.parse_ok or step.value is None:
         return False
     if step.value.kind not in ("matrix", "vector", "vector_list", "augmented"):
         return False
     if "[" not in step.raw_text:  # value wasn't literally written on this line
         return False
-    written = {abs(float(x)) for x in NUM.findall(step.raw_text)}
+    nums = [float(x) for x in NUM.findall(step.raw_text)]
+    written = {abs(x) for x in nums} | _derivable(nums)
     claimed = {abs(float(v)) for row in (step.value.rows or []) for v in row}
+    # Still fires on real fabrication: a model that quietly fixes [6 -5; 2 5] to
+    # [6 -5; 14 5] cannot get 14 out of any pair on that line.
     return bool(claimed - written)
 
 
