@@ -139,19 +139,29 @@
     global.NoemaPdf.toImages(file, function (page, total) {
       toast('Reading page ' + page + ' of ' + total + '\u2026');
     }).then(function (res) {
-      res.files.forEach(function (f) {
-        add({ kind: 'image', file: f, title: f.name });
+      (res.items || []).forEach(function (it) {
+        add({ kind: 'image', file: it.file, title: it.label || it.file.name });
       });
-      var msg = res.files.length === 1
-        ? 'Added 1 page.'
-        : 'Added ' + res.files.length + ' pages as separate problems.';
-      if (res.total > res.used) {
-        msg += ' Only the first ' + res.used + ' of ' + res.total + ' were taken.';
-      }
-      toast(msg);
+      toast(summarise(res));
     }).catch(function (err) {
       toast('Could not read that PDF: ' + (err && err.message ? err.message : err));
     });
+  }
+
+  /* Say what was actually found, including when a page could not be split --
+     a scan has no text layer to read the numbering from. */
+  function summarise(res) {
+    var n = (res.items || []).length;
+    var msg = 'Found ' + n + (n === 1 ? ' problem' : ' problems') + '.';
+    if (res.unsplit) {
+      msg += ' ' + res.unsplit + (res.unsplit === 1 ? ' page had' : ' pages had') +
+             ' no readable numbering, so ' + (res.unsplit === 1 ? 'it was' : 'they were') +
+             ' kept whole \u2014 tick the box on those if they hold several.';
+    }
+    if (res.total > res.used) {
+      msg += ' Only the first ' + res.used + ' of ' + res.total + ' pages were read.';
+    }
+    return msg;
   }
 
   /* ── wiring ────────────────────────────────────────────────────────── */
