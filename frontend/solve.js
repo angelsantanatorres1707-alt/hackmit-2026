@@ -682,6 +682,24 @@
       $('#ws-time').textContent = mmss(video.currentTime) + ' / ' + mmss(d);
     });
 
+    // The button paused correctly but always showed a play triangle, so it
+    // read as doing nothing and the next click just resumed. Drive the icon
+    // off the video's own events, not off the click, so it stays honest when
+    // playback ends or loops on its own.
+    var PLAY_D = 'M8 5l11 7-11 7z';
+    var PAUSE_D = 'M8 5h3v14H8zM13 5h3v14h-3z';
+    function paintPlayButton() {
+      var btn = $('#ws-play');
+      var showPause = !video.paused && !video.ended;
+      btn.querySelector('path').setAttribute('d', showPause ? PAUSE_D : PLAY_D);
+      btn.setAttribute('aria-label', showPause ? 'Pause' : 'Play');
+      btn.title = showPause ? 'Pause' : 'Play';
+    }
+    ['play', 'pause', 'ended', 'emptied'].forEach(function (e) {
+      video.addEventListener(e, paintPlayButton);
+    });
+    paintPlayButton();
+
     $('#ws-play').addEventListener('click', function () {
       if (video.paused) video.play(); else video.pause();
     });
