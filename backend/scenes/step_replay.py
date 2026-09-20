@@ -39,6 +39,7 @@ from manim import (
     Circle,
     Create,
     DashedLine,
+    DrawBorderThenFill,
     Dot,
     FadeIn,
     FadeOut,
@@ -115,13 +116,13 @@ UNIT_FLOOR, UNIT_CEIL = 0.06, 3.0
 # The ledger rail: the student's own lines, re-typeset, appearing as they are
 # played.  This is the "it read my work" evidence and it is where a step with
 # no honest geometry lives.
-LEDGER_L, LEDGER_R = 3.16, 6.98
+LEDGER_L, LEDGER_R = 3.10, 6.94
 LEDGER_TOP = 2.46
 LEDGER_GAP = 0.24
 MARK_X = LEDGER_L + 0.14
-TEXT_X = LEDGER_L + 0.40
+TEXT_X = LEDGER_L + 0.36
 
-FS_LEDGER = 21
+FS_LEDGER = 20
 FS_LEDGER_NUM = 19
 FS_LABEL = 28
 FS_CAPTION = 23
@@ -682,9 +683,9 @@ class StepReplay(ParamScene):
 
     def _play1(self, anims, run_time: float,
                exclude: Sequence[VMobject] = ()) -> None:
-        """Every step's FIRST play goes through here, so the re-frame is
-        folded into the step's own action instead of getting its own beat.
-        The frame chasing the arrow as it shoots out IS the drama."""
+        """The step's ACTION beat.  The pending re-frame is folded in HERE and
+        nowhere else, so the frame chases the arrow as it shoots out -- which
+        is the drama.  A separate "and now we zoom out" beat throws it away."""
         pack, commit = self._reframe_pack(exclude)
         a = [x for x in anims if x is not None] + pack + self._extra
         self._extra = []
@@ -693,6 +694,17 @@ class StepReplay(ParamScene):
         else:
             self.wait(max(0.12, run_time))
         commit()
+
+    def _beat(self, anims, run_time: float) -> None:
+        """A supporting beat (ledger line, invariant, setup).  Drains the
+        pending fades but NEVER the re-frame -- an invariant that quietly ate
+        the zoom is exactly how the hero step loses its punch."""
+        a = [x for x in anims if x is not None] + self._extra
+        self._extra = []
+        if a:
+            self.play(*a, run_time=max(0.12, run_time))
+        else:
+            self.wait(max(0.12, run_time))
 
     # ------------------------------------------------------------------
     # Registers and their mobjects
@@ -817,8 +829,10 @@ class StepReplay(ParamScene):
                 if 6 <= j < len(expr) - 1:
                     head_s, tail_s = expr[:j].strip(), expr[j:].strip()
 
-            head = label_text(head_s or " ", font_size=FS_LEDGER, color=col,
-                              max_width=max(0.8, width - nw), max_lines=2)
+            head = _left_align(label_text(head_s or " ", font_size=FS_LEDGER,
+                                          color=col,
+                                          max_width=max(0.8, width - nw),
+                                          max_lines=2))
             grp = VGroup()
             if num is not None:
                 grp.add(num)
@@ -866,8 +880,15 @@ class StepReplay(ParamScene):
         row = self.ledger[i]
         self._frame_target = frame
 
+        # The previous step's working (component segments, the arithmetic
+        # strip, a caption) clears as this step's line types in. Left up, it
+        # is stale panel geometry that the next re-frame would strand.
+        if len(self.transient):
+            self._extra.append(FadeOut(self.transient))
+            self.transient = VGroup()
+
         # 1. the student's own line types into the rail, in their own numbering
-        self.play(Write(row["group"]), run_time=min(0.62, 0.22 + 0.12 * 3))
+        self._beat([Write(row["group"])], 0.62)
 
         # 2. the invariant goes up BEFORE the claim lands (section 6)
         if st.get("invariant"):
@@ -885,6 +906,10 @@ class StepReplay(ParamScene):
             # It never takes the video down with it.
             print(f"[StepReplay] step {i} ({kind}) degraded: {exc}")
             self._k_ledger_only(st)
+        if self._frame_target is not None:
+            # A handler that never got to its action beat still owes the
+            # canvas its re-frame, or the next step draws at a stale scale.
+            self._play1([], 0.7)
 
         # 4. mark it -- correct steps must VISIBLY check out, which is what
         #    makes the wrong one mean something and what proves the app read
@@ -918,7 +943,9 @@ class StepReplay(ParamScene):
                 c = Circle(radius=max(0.05, r * u), color=PROBE,
                            stroke_width=2.8).move_to(o)
                 c.set_stroke(opacity=0.9)
-                c.set_z_index(Z_GEO)
+                c.set_fill(PROBE, opacity=0.10)
+                # Under the arrows, above the grid: a REGION, not an overlay.
+                c.set_z_index(Z_GEO - 3)
                 return c
             disc = build_disc(self.unit, self.origin)
             self._track_overlay(disc, build_disc)
@@ -947,11 +974,17 @@ class StepReplay(ParamScene):
                                       0.0]))
             cap_mob.set_z_index(Z_GEO)
             self.transient.add(cap_mob)
-        anims = [Create(m) for m in mobs]
+        # DrawBorderThenFill, not Create: Create on a FILLED shape reveals the
+        # fill in step with the partial stroke, which draws the half-finished
+        # disc as an ugly wedge.
+        anims = [(DrawBorderThenFill(m) if m.get_fill_opacity() > 0
+                  else Create(m)) for m in mobs]
         if cap_mob is not None:
             anims.append(FadeIn(cap_mob))
         if anims:
-            self._play1(anims, 1.0)
+            # Deliberately NOT _play1: the viewer is shown the target zone
+            # first, with nothing moving, so the miss means something.
+            self._beat(anims, 1.0)
             self.wait(0.25)
 
     def _span(self, vec, color=GHOST):
@@ -1076,12 +1109,12 @@ class StepReplay(ParamScene):
         reach = max(abs(cap), abs(claimed), abs(terms[0]) + abs(terms[1]), 1e-6)
         bu = BAR_LEN / reach
         x0 = self.BOXC[0] - self.BOX[0] / 2 + 0.52
-        base = self.BOXC[1] - self.BOX[1] / 2 + 0.60
-        y_track, y_terms, y_sum = base + 0.86, base + 0.44, base
+        base = self.BOXC[1] - self.BOX[1] / 2 + 0.40
+        y_track, y_terms, y_sum = base + 0.74, base + 0.38, base
 
-        backing = Rectangle(width=BAR_LEN + 1.9, height=1.50)
+        backing = Rectangle(width=BAR_LEN + 1.9, height=1.34)
         backing.move_to(np.array([x0 + (BAR_LEN + 1.9) / 2 - 0.16,
-                                  base + 0.42, 0.0]))
+                                  base + 0.36, 0.0]))
         backing.set_fill("#000000", opacity=0.72).set_stroke(width=0)
         backing.set_z_index(Z_GEO - 3)
 
@@ -1225,7 +1258,10 @@ class StepReplay(ParamScene):
 
         anims = [zs.animate.set_value(1.0), lt.animate.set_value(1.0)]
         if old_label is not None:
-            anims.append(FadeOut(old_label))
+            # play() forces one run_time on every animation, so the old
+            # caption is retired with a rate_func instead -- left to linger it
+            # drifts, unanchored, while the frame moves underneath it.
+            anims.append(FadeOut(old_label, rate_func=_rush_out))
         excl = [m for m in (old_arrow, old_label) if m is not None]
         self._play1(anims, rt, exclude=excl)
 
@@ -1400,7 +1436,7 @@ class StepReplay(ParamScene):
             radius=u, color=PROBE, stroke_width=2.8).move_to(o)
             .set_stroke(opacity=0.9).set_z_index(Z_GEO))
         # The invariant FIRST, then the shrink toward it.
-        self._play1([Create(circ)], 0.6)
+        self._beat([Create(circ)], 0.6)
         col = STUDENT if st["first_wrong"] else reg.color
         lbl = str(st.get("result_label") or f"{v_sym}-hat")
         anims = [Transform(reg.mob, self._arrow(RES, col, sw=reg.stroke_width))]
@@ -1430,7 +1466,7 @@ class StepReplay(ParamScene):
                 return c.set_stroke(opacity=0.9).set_z_index(Z_GEO)
             disc = build(self.unit, self.origin)
             self._track_overlay(disc, build)
-            self._play1([Create(disc)], 0.7)
+            self._beat([Create(disc)], 0.7)
         bind = str(st.get("bind") or "p")
         reg = self._new_vector(bind, RES,
                                STUDENT if st["first_wrong"] else CORRECT,
@@ -1494,26 +1530,45 @@ class StepReplay(ParamScene):
         # are already on screen; nothing new is asserted.
         if str(d.get("absurdity") or "") == "length":
             C = self._vecval(d.get("compare_to"))
-            if C is not None:
+            nc = float(np.linalg.norm(claim))
+            if C is not None and nc > 1e-9:
                 r = float(np.linalg.norm(C))
                 a0 = math.atan2(float(C[1]), float(C[0]))
                 a1 = math.atan2(float(claim[1]), float(claim[0]))
                 delta = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
                 arc = Arc(radius=r * self.unit, start_angle=a0, angle=delta,
-                          arc_center=self.origin, color=PROBE, stroke_width=3.0)
-                arc.set_z_index(Z_GEO)
-                nc = float(np.linalg.norm(claim))
-                foot = self.pt(claim * (r / nc)) if nc > 1e-9 else self.origin
-                gap = DashedLine(foot, self.pt(claim), color=PROBE,
-                                 stroke_width=3.2, dash_length=0.1)
-                gap.set_z_index(Z_GEO)
-                tag = T(f"|{d.get('compare_to')}|", font_size=21, color=PROBE)
-                tag.move_to(self._clamp_in_box(
-                    foot + np.array([0.34, -0.22, 0.0]), tag))
-                tag.set_z_index(Z_GEO)
-                cmob.add(arc, gap, tag)
+                          arc_center=self.origin, color=PROBE,
+                          stroke_width=4.4)
+                arc.set_z_index(Z_GEO + 0)
                 self.play(Create(arc), run_time=0.6)
-                self.play(Create(gap), FadeIn(tag), run_time=0.5)
+
+                # The arc lands ON the claim's own ray, so a gap drawn along
+                # that ray would be hidden underneath the arrow.  Offset the
+                # measurement sideways instead: a caliper showing how far the
+                # object's OWN length reaches along the claim, with the rest
+                # of the arrow left over in plain sight.
+                foot = self.pt(claim * (r / nc))
+                dirc = np.array([claim[0], claim[1], 0.0]) / nc
+                perp = np.array([-dirc[1], dirc[0], 0.0])
+                cdir = np.array([C[0], C[1], 0.0])
+                side = -1.0 if float(np.dot(perp, cdir)) > 0 else 1.0
+                off = 0.36 * perp * side
+                rail = DashedLine(self.origin + off, foot + off, color=PROBE,
+                                  stroke_width=3.4, dash_length=0.1)
+                cross = Line(foot - 0.19 * perp, foot + 0.19 * perp,
+                             color=PROBE, stroke_width=5.0)
+                stub_a = Line(self.origin, self.origin + off, color=PROBE,
+                              stroke_width=2.0).set_stroke(opacity=0.7)
+                stub_b = Line(foot, foot + off, color=PROBE,
+                              stroke_width=2.0).set_stroke(opacity=0.7)
+                tag = T(f"|{d.get('compare_to')}|", font_size=22, color=PROBE)
+                tag.move_to(self._clamp_in_box(
+                    (self.origin + foot) / 2 + off * 2.6, tag))
+                grp = VGroup(rail, cross, stub_a, stub_b, tag)
+                grp.set_z_index(Z_GEO)
+                cmob.add(arc, grp)
+                self.play(Create(rail), Create(cross), FadeIn(stub_a),
+                          FadeIn(stub_b), FadeIn(tag), run_time=0.55)
 
         # Cue 3: THE PROPERTY FAILS.  Last, never first -- TEMPLATE_AUDIT row
         # 8 already found the corner marker reads as nothing on its own, so
@@ -1528,7 +1583,8 @@ class StepReplay(ParamScene):
             back = -claim / nc if nc > 1e-9 else np.array([-1.0, 0.0])
             rm = right_angle_marker(self.pt(claim), back,
                                     self.pt(rf) - self.pt(claim),
-                                    size=0.32, color=PROBE)
+                                    size=0.38, color=PROBE,
+                                    stroke_width=4.0)
             rm.set_z_index(Z_GEO)
             self.play(Create(seg), run_time=0.6)
             self.play(Create(rm), run_time=0.4)
@@ -1550,6 +1606,25 @@ class _FakePanel:
     def pt(self, vec) -> np.ndarray:
         v = np.asarray(vec, float).flatten()
         return self.origin + np.array([v[0] * self.unit, v[1] * self.unit, 0.0])
+
+
+def _rush_out(t: float) -> float:
+    """Finish in the first sixth of the beat it is played in."""
+    return float(np.clip(t * 6.0, 0.0, 1.0))
+
+
+def _left_align(mob: VMobject) -> VMobject:
+    """``label_text`` centres its wrapped lines (``stack_lines`` does), which
+    under a left-anchored rail reads as a ragged paragraph rather than as the
+    student's own written work.  Flush them left."""
+    try:
+        if isinstance(mob, VGroup) and len(mob) > 1:
+            x = float(mob.get_left()[0])
+            for ln in mob:
+                ln.shift(np.array([x - float(ln.get_left()[0]), 0.0, 0.0]))
+    except Exception:  # noqa: BLE001
+        pass
+    return mob
 
 
 def _frame_for(points, box, box_center, pad: float, margin: float,

@@ -439,9 +439,12 @@ def _pick_vectors(env: Env, step: Any, want: int = 2) -> list[Reg]:
     recently bound vectors, which is what a student means by "the two vectors"
     when they did not name them.
     """
-    named = _resolve(env, _source_symbols(step), "vector")
+    declared = _source_symbols(step)
+    named = _resolve(env, declared, "vector")
     if len(named) >= want:
         return named[:want]
+    if declared and not named:
+        return []          # they named their operands and we do not have them
     text = f"{_get(step, 'claimed_expression', '')} {_get(step, 'raw_text', '')}"
     for tok in re.findall(r"[A-Za-z]\w*", text):
         reg = env.get(tok)
@@ -484,7 +487,12 @@ def _infer_scale(env: Env, step: Any, result: Optional[list[float]]):
     k*v really is the vector they wrote, the classification is not a guess.
     """
     text = f"{_get(step, 'claimed_expression', '')} {_get(step, 'raw_text', '')}"
-    vec_regs = _resolve(env, _source_symbols(step), "vector") or env.of_kind("vector")
+    declared = _source_symbols(step)
+    vec_regs = _resolve(env, declared, "vector")
+    if not vec_regs:
+        if declared:
+            return None    # see _pick_vectors: no substituting for a named symbol
+        vec_regs = env.of_kind("vector")
 
     # Candidate multipliers, most trustworthy first.
     cands: list[tuple[float, Optional[str]]] = []
@@ -868,7 +876,7 @@ def _invariant_and_divergence(kind: str, args: dict, extras: dict, env: Env,
     if kind == "dot_product":
         u, v = sym(args.get("u")), sym(args.get("v"))
         if u and v:
-            return ({"kind": "band", "cap_of": [u, v],
+            return ({"kind": "band", "cap_of": u, "against_of": v,
                      "caption": f"|{u}||{v}| is as far as any dot product reaches"},
                     {"absurdity": "length", "compare_to": u,
                      "residual_from": None, "right_angle_at": None})
@@ -877,7 +885,7 @@ def _invariant_and_divergence(kind: str, args: dict, extras: dict, env: Env,
     if kind == "add_vectors":
         u, v = sym(args.get("u")), sym(args.get("v"))
         if u and v:
-            return ({"kind": "parallelogram", "corners_of": [u, v],
+            return ({"kind": "parallelogram", "from_of": u, "to_of": v,
                      "caption": "the sum is the far corner"},
                     {"absurdity": "offcorner", "compare_to": u,
                      "residual_from": None, "right_angle_at": None})
@@ -886,7 +894,7 @@ def _invariant_and_divergence(kind: str, args: dict, extras: dict, env: Env,
     if kind == "matrix_apply":
         M, v = sym(args.get("M")), sym(args.get("v"))
         if M and v:
-            return ({"kind": "point", "lattice_of": M, "applied_to": v,
+            return ({"kind": "point", "lattice_of": M, "carried_of": v,
                      "caption": f"{v} rides the grid {M} makes"},
                     {"absurdity": "offlattice", "compare_to": v,
                      "residual_from": None, "right_angle_at": None})
@@ -895,7 +903,8 @@ def _invariant_and_divergence(kind: str, args: dict, extras: dict, env: Env,
     if kind == "matrix_product":
         factors = [s for s in (extras.get("factors") or []) if s in env]
         if len(factors) >= 2:
-            return ({"kind": "composite", "factors_of": factors,
+            return ({"kind": "composite", "left_of": factors[0],
+                     "right_of": factors[1],
                      "caption": "apply them one after the other"},
                     {"absurdity": "none", "compare_to": None,
                      "residual_from": None, "right_angle_at": None})
@@ -1316,7 +1325,11 @@ def _result_block(step: Any, cls: Classified) -> dict:
     if sca is not None:
         return {"kind": "scalar", "value": sca,
                 "display": _exact_scalar_display(value) or fmt_num(sca)}
-    return {"kind": "none", "value": None,
+    # StepReplay.validate parses every step's result as a number, so a line
+    # with no numeric claim of its own still needs one. The placeholder never
+    # reaches the screen: these kinds are ledger-only and `display` -- the
+    # student's own words -- is what gets drawn. `no_value` says so out loud.
+    return {"kind": "scalar", "value": 0.0, "no_value": True,
             "display": normalise_expr(_get(step, "raw_text", ""))}
 
 
@@ -1385,12 +1398,12 @@ def _invariant_ok(inv: dict, env: Env) -> bool:
     """Validation case 5: every ``*_of`` names a symbol in scope, never a
     literal. A caption is prose and is exempt; it is linted by the planner."""
     for key, val in inv.items():
-        if not key.endswith("_of") and key not in ("applied_to",):
+        if not key.endswith("_of"):
             continue
-        names = val if isinstance(val, list) else [val]
-        for n in names:
-            if not isinstance(n, str) or n not in env:
-                return False
+        # A list here would be rejected downstream, and a number would be a
+        # literal smuggled in as a region. Exactly one in-scope symbol.
+        if not isinstance(val, str) or val not in env or _num(val) is not None:
+            return False
     return True
 
 
