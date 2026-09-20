@@ -182,8 +182,12 @@ HINTS: dict[str, tuple[str, str]] = {
              "the second minor in {step}.", "watch how little the volume changes"),
     "LA06": ("Watch which color the square is showing when it lands in {step}.",
              "watch which side lands face up"),
-    "LA07": ("The grid comes back square and pointing the right way. Watch its size against "
-             "the faint original in {step}.", "watch the size it comes back at"),
+    # True of both visuals this code can reach: the recipe walkthrough and the
+    # round-trip grid it falls back to. The shape is right and the scaling is
+    # the missing step, whichever way it is drawn.
+    "LA07": ("Every entry is in the right place with the right sign -- the shape of it is "
+             "correct. Watch what the determinant is meant to do to all four of them in "
+             "{step}.", "watch what the determinant does to all four"),
     "LA08": ("It almost comes home. Watch the two numbers on the main diagonal of {step} as "
              "the grid settles.", "watch the main diagonal"),
     "LA09": ("Your vector's line is drawn on screen. Watch whether the arrow stays on that "
@@ -537,7 +541,7 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
     builder = {
         "LA01": _grid_single, "LA16": _grid_single,
         "LA02": _grid_order,
-        "LA07": _grid_roundtrip, "LA08": _grid_roundtrip,
+        "LA07": _inverse_recipe, "LA08": _inverse_recipe,
         "LA03": _static, "LA18": _static,
         "LA04": _determinant, "LA05": _determinant, "LA06": _determinant,
         "LA09": _eigen_vector, "LA10": _eigen_value,
@@ -713,7 +717,7 @@ class SceneUnavailable(Exception):
     """This template's guards say it cannot tell an honest story about this error."""
 
 
-_REPLAY_EXEMPT = {"CompositionOrderVector"}
+_REPLAY_EXEMPT = {"CompositionOrderVector", "InverseOf2x2"}
 
 _TITLES = {
     "GridTransformCompare": "{ref}, applied to the plane",
@@ -866,6 +870,56 @@ def _order_matching(env, S, a, b):
                 return stages
         except Exception:  # noqa: BLE001
             continue
+    return None
+
+
+def _inverse_recipe(verdict, ext, env, S, C):
+    """LA07/LA08: show how the inverse is BUILT, on their own matrix.
+
+    The round-trip comparison shows that their inverse does not undo the map,
+    which is true and does not say where the method went wrong. This walks the
+    recipe instead -- determinant, swap, negate, divide -- and stops before the
+    division is carried out, so the answer stays theirs to finish.
+    """
+    M = _subject(env)
+    m = _rows(M)
+    if not (_is_2x2(M) and _finite(m)):
+        return _grid_roundtrip(verdict, ext, env, S, C)
+    det = m[0][0] * m[1][1] - m[0][1] * m[1][0]
+    if abs(det) < 1e-9:
+        # No inverse to build, and saying so is the answer to "find A^-1".
+        return _grid_roundtrip(verdict, ext, env, S, C)
+    return "InverseOf2x2", {
+        "matrix": m,
+        "matrix_name": _subject_name(env) or "A",
+        # Their determinant is their own number and always visible; without one
+        # the scene masks it like any other value computed from the problem.
+        "student_det": _student_determinant(ext),
+        "show_general_rule": True,
+        "title": "How a 2x2 inverse is built",
+    }
+
+
+def _subject_name(env: dict[str, Val]) -> Optional[str]:
+    for name in ("A", "M", "B"):
+        v = env.get(name)
+        if v is not None and _is_2x2(v):
+            return name
+    return None
+
+
+def _student_determinant(ext) -> Optional[str]:
+    """The determinant the student wrote, if they wrote one."""
+    for st in sorted(ext.steps, key=lambda s: (s.page, s.reading_order)):
+        if st.crossed_out:
+            continue
+        op = (st.claimed_operation or "").lower()
+        text = (st.raw_text or "").lower()
+        if "det" not in op and "det" not in text:
+            continue
+        val = getattr(st.value, "scalars", None)
+        if val:
+            return fmt_num(val[0])
     return None
 
 

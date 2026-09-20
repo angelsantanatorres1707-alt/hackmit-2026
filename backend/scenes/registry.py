@@ -34,6 +34,7 @@ from eigen_ray import EigenRayTest  # noqa: E402
 from grid_transform import GridTransformCompare  # noqa: E402
 from angle_check import AnglePreservationCheck  # noqa: E402
 from composition_order import CompositionOrderVector  # noqa: E402
+from inverse_2x2 import InverseOf2x2  # noqa: E402
 from line_system import LineSystemCompare  # noqa: E402
 from span_compare import SpanCompare  # noqa: E402
 from step_focus import StaticStepHighlight  # noqa: E402
@@ -51,6 +52,26 @@ _L = "planner"   # filled by the LLM
 
 
 TEMPLATES: dict[str, dict[str, Any]] = {
+    "InverseOf2x2": {
+        "class": InverseOf2x2,
+        "module": "inverse_2x2",
+        "file": os.path.join(_HERE, "inverse_2x2.py"),
+        "scene": "InverseOf2x2",
+        "priority": "P0",
+        "duration": 27.0,
+        "covers": ["LA07", "LA08"],
+        "summary": "The 2x2 inverse recipe, then the same recipe running on "
+                   "the student's own matrix, stopping at the division so the "
+                   "answer stays theirs to finish.",
+        "param_schema": {
+            "matrix": (_S, "the 2x2 the problem gives"),
+            "matrix_name": (_S, "what the page calls it"),
+            "student_det": (_S, "the determinant THEY wrote, or null to mask it"),
+            "show_general_rule": (_L, "bool"),
+            "title": (_L, "str"),
+            "hint": (_L, "str, positional only -- see check_hint"),
+        },
+    },
     "CompositionOrderVector": {
         "class": CompositionOrderVector,
         "module": "composition_order",

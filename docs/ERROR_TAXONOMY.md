@@ -642,6 +642,32 @@ from an earlier false sentence, they blame the sentence and we blame the conclus
 `trans-rows` ("put them in as rows", then the matrix). Both of ours are defensible, and
 both of theirs point at the idea rather than its consequence. Open.
 
+## InverseOf2x2 — a supplied template, ported
+
+Hanna wrote `inverse_2x2.py` as a standalone Manim template and asked for it to drive
+every 2x2 inverse problem. Two things had to change, and neither was optional:
+
+**No LaTeX.** The original is built from `Matrix`, `MathTex` and `Tex`. All three shell
+out to `latex`, which is deliberately not installed (see CLAUDE.md). `Matrix` builds even
+its BRACKETS from a LaTeX array, so swapping the entry class is not enough. Everything is
+`TextMatrix` and `Text` here.
+
+**No answer.** The original ends by printing `A⁻¹`, verifying `A·A⁻¹ = I`, and recapping
+the result — the one thing this product does not do. What survives is the whole method:
+the symbolic recipe, the determinant sweep on their matrix, the swap, the negation. What
+is cut is the division being *carried out*. The adjugate is shown because it is visibly
+made of the student's own numbers; the divided entries are the answer and are masked.
+
+The determinant is shown only when the student wrote it — then it is their number and
+always visible, per the product rule. Otherwise it masks like anything else computed from
+the problem.
+
+Routing: LA07 and LA08 via `_inverse_recipe`, which falls back to the round-trip grid for
+anything not a non-singular 2x2. A singular matrix goes to the fallback deliberately:
+"there is no inverse" is the answer to "find A⁻¹".
+
+LA07's hint was rewritten to be true of both visuals, since it can reach either.
+
 ---
 
 ### LA19 — projection with the wrong denominator
