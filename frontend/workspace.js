@@ -363,7 +363,28 @@
     // use the API's no-vision path. Nothing is sent until it parses.
     if (!S.files.length) {
       if (!note) return;
-      var parsed = global.NoemaTyped.parse(note);
+      var T = global.NoemaTyped;
+
+      // A plain-English question with no work attached. Do not analyse and do
+      // not render anything -- work out which piece of work would answer it
+      // and ask for that. The upload that follows is what makes the video.
+      if (T.isQuestion(note)) {
+        log('you', note, true);
+        workBox.clear();
+        var want = T.whatToAsk(note, S.problem && S.problem.text);
+        if (want.outOfScope) {
+          log('noema', 'I cannot help with ' + want.outOfScope + ' \u2014 there is no ' +
+                       'calculus in this app, so there would be nothing real behind the ' +
+                       'animation. I cover linear algebra: products and their order, ' +
+                       'inverses and determinants, eigenvectors, projections, and systems.');
+        } else {
+          log('noema', 'Upload ' + want.ask + ' \u2014 drop a photo in, or type it one ' +
+                       'step per line \u2014 and I will show you where it breaks.');
+        }
+        return;
+      }
+
+      var parsed = T.parse(note);
       if (parsed.ok && !parsed.problem && S.problem && S.problem.text) {
         parsed.problem = S.problem.text;      // the one kept above, not re-typed
       }

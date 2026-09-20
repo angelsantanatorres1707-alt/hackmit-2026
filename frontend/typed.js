@@ -261,5 +261,54 @@
     };
   }
 
-  global.NoemaTyped = { parse: parse, toPayload: toPayload, parseValue: parseValue };
+
+  /* ── a question, not working ───────────────────────────────────────────
+   *
+   * "i reduced it but don't understand what it says about how many solutions
+   * there are" has no '=' and no brackets, so parse() finds no steps and the
+   * box used to answer with a syntax lecture. There is no model behind this
+   * box, so it cannot answer the question -- but it can work out WHICH piece
+   * of work would let it show the answer, and ask for that.
+   *
+   * Matched against the question and the kept problem together, because the
+   * problem statement is usually the thing that names the task.
+   */
+
+  var ASKS = [
+    { wants: 'your reduced row echelon form',
+      words: ['row echelon', 'rref', 'row reduce', 'row-reduce', 'row reduction',
+              'augmented', 'echelon', 'how many solutions', 'no solution',
+              'one solution', 'infinitely many', 'consistent', 'inconsistent',
+              'gaussian', 'gauss'] },
+    { wants: 'your eigenvector work',  words: ['eigen'] },
+    { wants: 'your inverse',           words: ['inverse', 'invert', 'adjugate'] },
+    { wants: 'your determinant',       words: ['determinant', 'det('] },
+    { wants: 'your projection',        words: ['projection', 'project ', 'orthogonal', 'perpendicular'] },
+    { wants: 'your row reduction',     words: ['rank', 'independent', 'independence', 'basis', 'span'] },
+    { wants: 'your product',           words: ['multiply', 'multiplication', 'product', 'compose', 'composition', 'order'] },
+  ];
+
+  var OUT_OF_SCOPE = ['derivative', 'differentiate', 'integral', 'integrate',
+                      'calculus', 'limit', 'chain rule', 'taylor'];
+
+  function isQuestion(text) { return !/[=\[\]]/.test(String(text || '')); }
+
+  /* whatToAsk(question, problem) -> {ask} | {outOfScope, term} */
+  function whatToAsk(question, problem) {
+    var q = String(question || '').toLowerCase();
+    var both = (q + ' ' + String(problem || '')).toLowerCase();
+
+    for (var i = 0; i < OUT_OF_SCOPE.length; i++) {
+      if (q.indexOf(OUT_OF_SCOPE[i]) !== -1) return { outOfScope: OUT_OF_SCOPE[i] };
+    }
+    for (var j = 0; j < ASKS.length; j++) {
+      for (var k = 0; k < ASKS[j].words.length; k++) {
+        if (both.indexOf(ASKS[j].words[k]) !== -1) return { ask: ASKS[j].wants };
+      }
+    }
+    return { ask: 'your work' };
+  }
+
+  global.NoemaTyped = { parse: parse, toPayload: toPayload, parseValue: parseValue,
+    isQuestion: isQuestion, whatToAsk: whatToAsk };
 })(window);
