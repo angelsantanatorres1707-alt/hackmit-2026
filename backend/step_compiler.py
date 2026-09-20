@@ -23,7 +23,7 @@ Entry points
     and 7. ``False`` means "fall through to the old template ladder", not
     "error".
 
-``compile(ext, verdict) -> CompileResult``
+``compile_replay(ext, verdict) -> CompileResult``
     Both of the above plus the warnings, for debugging and for tests.
 
 Classification (STEP_REPLAY.md §2) is driven by ``claimed_operation`` first,
@@ -45,7 +45,7 @@ from typing import Any, Iterable, Optional
 
 __all__ = [
     "compile_step_replay",
-    "compile",
+    "compile_replay",
     "viable",
     "CompileResult",
     "STEP_KINDS",
@@ -87,6 +87,8 @@ BOX_W, BOX_H = 9.5, 6.05
 BOX_CENTER = (-1.85, -0.30)
 LEDGER_X = 4.95
 ZOOM_MAX = 2.6
+MAX_UNIT = 2.0           # BOX_W/2.0 = 4.75 cells, the legibility floor
+GROW_MAX_UNIT = 4.0      # normalize: the unit circle carries the frame
 PAD = 0.9                  # math units of air around the bbox
 MARGIN = 0.55              # scene units kept clear inside the box (arrowheads)
 
@@ -195,7 +197,9 @@ def as_vector(obj: Any) -> Optional[list[float]]:
             flat = [c for r in rows for c in r]
         else:
             flat = list(rows)
-    elif _obj_kind(obj) in ("vector", "scalar_list"):
+    elif _obj_kind(obj) == "vector":
+        # A list of eigenvalues is NOT a point. Only an object the extractor
+        # actually called a vector may fall back to `scalars` for coordinates.
         sc = _get(obj, "scalars")
         if isinstance(sc, list):
             flat = list(sc)
@@ -329,7 +333,12 @@ _SCALAR_BIND_NAMES = ("k", "m", "n", "c")
 _VECTOR_BIND_NAMES = ("p", "q", "r", "w")
 _MATRIX_BIND_NAMES = ("P", "Q", "R", "S")
 
-_LHS_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_^']{0,3})\s*=(?!=)")
+#: ``AB = [...]`` and ``eigenvector v = (1,0)`` both name their result; but
+#: ``b.a = 5`` does NOT name it ``a``, and binding there would clobber the given
+#: ``a`` mid-replay. Hence the prefix may only be words: letters and spaces.
+_LHS_RE = re.compile(r"^[A-Za-z ]{0,20}?\b([A-Za-z][A-Za-z0-9_^']{0,3})\s*=(?!=)")
+_NOT_A_NAME = {"proj", "det", "so", "then", "and", "if", "let", "sum",
+               "norm", "unit", "row", "eq", "ans", "thus"}
 
 
 def _lhs_symbol(step: Any) -> Optional[str]:
@@ -337,12 +346,11 @@ def _lhs_symbol(step: Any) -> Optional[str]:
     they just produced is a better register name than anything we invent."""
     for text in (_get(step, "claimed_expression", ""), _get(step, "raw_text", "")):
         m = _LHS_RE.match(str(text or ""))
-        if m:
-            sym = m.group(1)
-            if sym.lower() not in ("proj", "det", "so", "then", "and"):
-                return sym
+        if m and m.group(1).lower() not in _NOT_A_NAME:
+            return m.group(1)
     expr = str(_get(step, "claimed_expression", "") or "").strip()
-    if expr and re.fullmatch(r"[A-Za-z][A-Za-z0-9_^']{0,3}", expr):
+    if expr and re.fullmatch(r"[A-Za-z][A-Za-z0-9_^']{0,3}", expr) \
+            and expr.lower() not in _NOT_A_NAME:
         return expr
     return None
 
@@ -524,6 +532,14 @@ def _infer_scale(env: Env, step: Any, result: Optional[list[float]]):
 # Classification (STEP_REPLAY.md §2)
 # --------------------------------------------------------------------------
 
+#: Operations that are honest arithmetic but have no motion of their own.
+SCALARISH_OPS = frozenset({
+    "determinant_expand", "cofactor", "char_poly", "solve_char_poly",
+    "back_substitute", "state_answer", "transpose", "inverse_formula",
+    "augment", "eigenvector_solve",
+})
+
+
 @dataclass
 class Classified:
     kind: str
@@ -546,7 +562,7 @@ def _classify(step: Any, env: Env, ctx: dict[str, Any]) -> Classified:
     value = _get(step, "value")
     vkind = _obj_kind(value)
 
-    vec = as_vector(value) if vkind in ("vector", "unknown", "scalar_list") else None
+    vec = as_vector(value) if vkind in ("vector", "unknown") else None
     mat = as_matrix(value) if vkind in ("matrix", "augmented", "unknown") else None
     sca = as_scalar(value) if vkind in ("scalar", "unknown") else None
 
@@ -722,6 +738,16 @@ def _classify(step: Any, env: Env, ctx: dict[str, Any]) -> Classified:
                                   "claimed": True},
                           why=f"claimed_operation={op!r} with a matrix value",
                           bind_kind="matrix")
+
+    # A determinant, a characteristic polynomial, a back-substitution: real
+    # arithmetic with no geometry of its own. It says so rather than inventing
+    # a picture (STEP_REPLAY.md §2.11, ERROR_TAXONOMY.md §3).
+    if op in SCALARISH_OPS:
+        return Classified(
+            "scalar_value",
+            extras={"display": normalise_expr(raw or expr)},
+            why=f"claimed_operation={op!r} -- an arithmetic line with no "
+                f"geometry of its own")
 
     return Classified("literal", why=f"claimed_operation={op!r} with no drawable value")
 
@@ -922,17 +948,30 @@ def _matrix_points(M: list[list[float]]) -> list[list[float]]:
     return []
 
 
+def _origin_at(unit: float, points: list[list[float]], pad: float = PAD) -> list[float]:
+    """The plane origin that puts ``points`` in the box at a GIVEN unit.
+
+    Needed because the opening unit gets clamped to ``zoom_max`` and the origin
+    has to follow the clamp, or the opening frame is centred on nothing.
+    """
+    pts = [[0.0, 0.0]] + [[float(p[0]), float(p[1])] for p in points if p is not None]
+    mid = [(min(p[i] for p in pts) - pad + max(p[i] for p in pts) + pad) / 2
+           for i in (0, 1)]
+    return [BOX_CENTER[0] - unit * mid[0], BOX_CENTER[1] - unit * mid[1], 0.0]
+
+
 def _solve_canvas(opening: list[list[float]], every: list[list[float]],
                   grow: bool) -> dict:
     u_end, org_end = frame_for(every)
-    u_start, org_start = frame_for(opening or every)
-    u_start = min(u_start, ZOOM_MAX * u_end)
-    if not grow:
-        u_start = min(u_start, 4.0)
-        u_end = min(u_end, 4.0)
-    _, org_start = frame_for(opening or every)
-    # Recompute the opening origin at the clamped unit so the two planes share a
-    # structure: same radius, same step, only the unit differs.
+    u_start, _ = frame_for(opening or every)
+    # Without `grow`, a story that lives inside one math unit of the origin must
+    # not blow the unit up: below ~4 cells across the box the lattice stops
+    # reading as a grid at all (STEP_REPLAY.md §5.3), so BOX_W/unit >= 4.75.
+    cap = GROW_MAX_UNIT if grow else MAX_UNIT
+    u_end = min(u_end, cap)
+    u_start = min(u_start, ZOOM_MAX * u_end, cap)
+    org_end = _origin_at(u_end, every)
+    org_start = _origin_at(u_start, opening or every)
     cells = BOX_W / u_end if u_end > 0 else 0.0
     grid_step = 1 if cells <= 24 else 2
     radius = int(min(26, math.ceil((max(BOX_W, BOX_H) / 2 + 1.6) / max(u_end, 1e-6))))
@@ -1079,7 +1118,8 @@ def _status_for(step: Any, index: int, verdict: Any) -> tuple[str, bool]:
 def _seed_givens(ext: Any, env: Env) -> dict:
     """``problem.givens`` -> the opening register file and the ``givens`` block."""
     out: dict[str, dict] = {}
-    for g in _get(ext, "problem", {}) and (_get(_get(ext, "problem", {}), "givens", []) or []):
+    problem = _get(ext, "problem")
+    for g in (_get(problem, "givens", []) or []):
         sym = str(_get(g, "symbol", "") or "").strip()
         obj = _get(g, "object")
         if not sym or sym in env:
@@ -1100,48 +1140,48 @@ def _seed_givens(ext: Any, env: Env) -> dict:
     return out
 
 
-def _context(ext: Any, kinds_ahead: list[str]) -> dict:
+def _context(ext: Any) -> dict:
     problem = _get(ext, "problem", {})
     topic = str(_get(problem, "topic", "other") or "other")
     asks = str(_get(problem, "asks_for", "") or "")
     statement = str(_get(problem, "statement", "") or "")
     projection = (topic == "projection"
                   or bool(_PROJ_EXPR_RE.search(f"{asks} {statement}")))
-    return {"topic": topic, "projection": projection,
-            "asks_for": asks, "kinds_ahead": kinds_ahead}
+    return {"topic": topic, "projection": projection, "asks_for": asks}
 
 
 def compile_step_replay(ext: Any, verdict: Any = None, *, title: Optional[str] = None,
                         hint: Optional[str] = None, student_label: str = "YOUR WORK",
                         budget: float = BUDGET) -> dict:
     """The params block ``StepReplay`` consumes. Never raises."""
-    return compile(ext, verdict, title=title, hint=hint,
-                   student_label=student_label, budget=budget).params
+    return compile_replay(ext, verdict, title=title, hint=hint,
+                          student_label=student_label, budget=budget).params
 
 
-def compile(ext: Any, verdict: Any = None, *, title: Optional[str] = None,
-            hint: Optional[str] = None, student_label: str = "YOUR WORK",
-            budget: float = BUDGET) -> CompileResult:
+def compile_replay(ext: Any, verdict: Any = None, *, title: Optional[str] = None,
+                   hint: Optional[str] = None, student_label: str = "YOUR WORK",
+                   budget: float = BUDGET) -> CompileResult:
     """Full result: params, the planner's gate, and why."""
     warnings: list[str] = []
     env = Env()
     givens = _seed_givens(ext, env)
 
-    raw_steps = list(_get(ext, "steps", []) or [])
+    # verify.py sorts by (page, reading_order) before indexing its results, so
+    # the same order here makes `index` line up when a step id does not match.
     raw_steps = sorted(
-        enumerate(raw_steps),
-        key=lambda t: (int(_get(t[1], "page", 1) or 1),
-                       int(_get(t[1], "reading_order", 0) or 0), t[0]),
+        _get(ext, "steps", []) or [],
+        key=lambda st: (int(_get(st, "page", 1) or 1),
+                        int(_get(st, "reading_order", 0) or 0)),
     )
 
-    ctx = _context(ext, [])
+    ctx = _context(ext)
     ctx["system_of"] = next((r.symbol for r in env.of_kind("matrix")), None)
 
     steps: list[dict] = []
     motion = 0
     leaky: set[str] = set()
 
-    for index, step in raw_steps:
+    for index, step in enumerate(raw_steps):
         cls = _classify(step, env, ctx)
         status, first_wrong = _status_for(step, index, verdict)
 
@@ -1274,7 +1314,11 @@ def _bind(env: Env, step: Any, cls: Classified, result: dict) -> Optional[str]:
     if kind not in ("vector", "matrix", "scalar") or cls.bind_kind is None:
         return None
     label = cls.extras.get("label")
-    if cls.kind in ("define_vector", "define_matrix") and label:
+    # A copied given writes the symbol it copies -- the student's transcription
+    # REPLACES the printed value in the register file, which is what makes a
+    # mis-copy show up downstream. A derived claim gets a fresh name instead.
+    if cls.kind in ("define_vector", "define_matrix") and label \
+            and not cls.extras.get("claimed"):
         sym = str(label)
     else:
         preferred = [_lhs_symbol(step) or ""]
