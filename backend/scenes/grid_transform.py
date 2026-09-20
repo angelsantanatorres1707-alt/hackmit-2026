@@ -50,6 +50,7 @@ from helpers import (  # noqa: E402
     check_hint,
     fit_unit,
     fmt_rows,
+    min_stretch,
     label_text,
     two_panel_layout,
 )
@@ -166,6 +167,17 @@ class GridTransformCompare(ParamScene):
                     tips.append(w)
         unit = fit_unit(tips + tracks)
 
+        # Pick the grid spacing for the state the scene ENDS in: a squeezing
+        # matrix pulls the lattice lines together and a unit-step grid turns
+        # into a moire wash at 720p.
+        prods = []
+        for stages in (s_stages, c_stages):
+            M = np.eye(2)
+            for S in stages:
+                M = S @ M
+                prods.append(M.copy())
+        shrink = min_stretch(*prods)
+
         lay = two_panel_layout(
             self,
             title=p["title"],
@@ -176,6 +188,7 @@ class GridTransformCompare(ParamScene):
             correct_rows=p["correct_display"],
             ghost_reference=p["ghost_reference"],
             unit=unit,
+            grid_shrink=shrink,
         )
 
         l_arrows = [VecArrow(lay.left, v, TRACK_COLORS[i % 3])

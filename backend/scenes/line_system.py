@@ -41,6 +41,7 @@ from manim import (
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from helpers import (  # noqa: E402
     BOX,
+    MAT_Y,
     CORRECT,
     I_HAT,
     J_HAT,
@@ -62,9 +63,14 @@ from helpers import (  # noqa: E402
     two_panel_layout,
 )
 
-PLANE_DX = -2.5
-PLANE_BOX = 5.2
-BOARD_X = 3.9
+# The plane used to be a 5.2 square at x=-2.5 with the scoreboard at 3.9,
+# which left 2 units of dead frame on the left and a panel only 65% of the
+# frame height. The frame is 16:9; so is the panel now.
+PLANE_DX = -3.58
+PLANE_BOX = 6.0        # HEIGHT -- what fit_unit and the in-panel captions use
+PLANE_BOX_W = 6.4      # WIDTH
+PLANE_DY = 0.10
+BOARD_X = 3.45
 
 
 def _line_mobject(P: Panel, coeffs, *, color: str, stroke_width: float = 4.0,
@@ -208,7 +214,8 @@ class LineSystemCompare(ParamScene):
         unit = fit_unit([xs, xt, np.array([2.0, 2.0])], box=PLANE_BOX)
 
         lay = one_panel_layout(self, title=p["title"], hint=p["hint"],
-                               dx=PLANE_DX, dy=-0.7, box=PLANE_BOX, unit=unit)
+                               dx=PLANE_DX, dy=PLANE_DY, box=PLANE_BOX_W,
+                               box_h=PLANE_BOX, unit=unit)
         P = lay.left
 
         l1 = _line_mobject(P, e1, color=I_HAT)
@@ -245,7 +252,7 @@ class LineSystemCompare(ParamScene):
                          CORRECT if same else STUDENT))
         if rows:
             board = scoreboard(rows, anchor=np.array([BOARD_X, 0.3, 0.0]),
-                               label_size=18, value_size=30)
+                               label_size=22, value_size=38)
             self.play(LaggedStart(*[FadeIn(r) for r in board], lag_ratio=0.45),
                       FadeIn(drops), run_time=2.0)
         else:
@@ -271,9 +278,12 @@ class LineSystemCompare(ParamScene):
                          _closest_point(e1), _closest_point(e2),
                          _closest_point(s_line), _closest_point(c_line)])
 
+        # The right panel's heading names the INVARIANT to aim at (the two
+        # lines still crossing where they did), not "the correct row". No
+        # numbers are drawn on that side: the pivot is the whole argument.
         lay = two_panel_layout(self, title=p["title"],
                                student_label="YOUR ROW OPERATION",
-                               correct_label="THE ROW OPERATION",
+                               correct_label="WHAT THE OPERATION MUST KEEP",
                                hint=p["hint"], unit=unit)
         L, R = lay.left, lay.right
 
@@ -289,9 +299,12 @@ class LineSystemCompare(ParamScene):
                  .move_to(P.pt(hinge)).set_z_index(Z_FLASH)
                  for key, P in (("l", L), ("r", R))}
 
-        op_tag = label_text(p["op_label"], font_size=20, color=CORRECT,
-                            max_width=2.2)
-        op_tag.move_to(np.array([0.0, 0.2, 0.0])).set_z_index(Z_CHROME)
+        # The gutter between the panels is now only ~0.8 wide, so the tag
+        # goes in the empty matrix row above them instead of on top of the
+        # right panel's edge.
+        op_tag = label_text(p["op_label"], font_size=26, color=CORRECT,
+                            max_width=3.2, weight="BOLD")
+        op_tag.move_to(np.array([0.0, MAT_Y, 0.0])).set_z_index(Z_CHROME)
 
         # -- 0.0 / 1.2 --------------------------------------------------
         self.play(Create(L.plane), Create(R.plane), FadeIn(lay.title),

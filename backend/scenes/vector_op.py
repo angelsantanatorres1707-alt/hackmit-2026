@@ -70,9 +70,14 @@ from helpers import (  # noqa: E402
     one_panel_layout,
 )
 
-PLANE_DX = -2.5
-PLANE_BOX = 5.2
-BOARD_X = 3.9
+# The plane used to be a 5.2 square at x=-2.5 with the scoreboard at 3.9,
+# which left 2 units of dead frame on the left and a panel only 65% of the
+# frame height. The frame is 16:9; so is the panel now.
+PLANE_DX = -3.58
+PLANE_BOX = 6.0        # HEIGHT -- what fit_unit and the in-panel captions use
+PLANE_BOX_W = 6.4      # WIDTH
+PLANE_DY = 0.10
+BOARD_X = 3.45
 
 
 class VectorOpCompare(ParamScene):
@@ -89,7 +94,7 @@ class VectorOpCompare(ParamScene):
         # Row 0 is the student's. The reference row is masked at render
         # time -- it names the property, the student supplies the number.
         "readouts": [["your residual . v", "-12.36"],
-                     ["a projection's residual . v", "0.00"]],
+                     ["projection's residual . v", "0.00"]],
         "title": "Your projection, drawn on the same axes",
         "hint": "watch whether the corner marker closes",
     }
@@ -135,7 +140,10 @@ class VectorOpCompare(ParamScene):
         rows = []
         for r in (p.get("readouts") or [])[:3]:
             try:
-                rows.append([str(r[0])[:26], str(r[1])[:12]])
+                # 30, not 26: the reference rows are now named after the
+                # PROPERTY ("a projection's residual . v") rather than
+                # "correct ...", and 26 cut the last word off.
+                rows.append([str(r[0])[:30], str(r[1])[:12]])
             except Exception as exc:  # noqa: BLE001
                 raise SceneParamError(f"readouts: bad row {r!r}") from exc
         p["readouts"] = rows
@@ -173,7 +181,8 @@ class VectorOpCompare(ParamScene):
         else:
             unit = fit_unit([u, v, wc, wt, np.array([1.0, 1.0])], box=PLANE_BOX)
         lay = one_panel_layout(self, title=p["title"], hint=p["hint"],
-                               dx=PLANE_DX, dy=-0.7, box=PLANE_BOX, unit=unit)
+                               dx=PLANE_DX, dy=PLANE_DY, box=PLANE_BOX_W,
+                               box_h=PLANE_BOX, unit=unit)
         P = lay.left
 
         inputs = VGroup()
@@ -286,7 +295,8 @@ class VectorOpCompare(ParamScene):
         unit = min(2.4, (PLANE_BOX / 2) * 0.86 / extent)
 
         lay = one_panel_layout(self, title=p["title"], hint=p["hint"],
-                               dx=PLANE_DX, dy=-0.7, box=PLANE_BOX, unit=unit)
+                               dx=PLANE_DX, dy=PLANE_DY, box=PLANE_BOX_W,
+                               box_h=PLANE_BOX, unit=unit)
         P = lay.left
         self.remove(P.plane)  # a flat square grid under an iso solid lies
 
@@ -370,7 +380,7 @@ class VectorOpCompare(ParamScene):
             else:
                 colored.append((lab, MASK, MASK_COLOR))
         board = scoreboard(colored, anchor=np.array([BOARD_X, 0.3, 0.0]),
-                           label_size=18, value_size=30, max_width=4.4)
+                           label_size=22, value_size=38, max_width=5.3)
         self.play(FadeIn(board), run_time=1.2)
 
 

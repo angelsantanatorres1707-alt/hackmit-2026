@@ -37,6 +37,7 @@ from helpers import (  # noqa: E402
     as_vector,
     check_hint,
     fit_unit,
+    min_stretch,
     fmt_num,
     fmt_rows,
     foot_on_line,
@@ -154,6 +155,7 @@ class EigenRayTest(ParamScene):
             hint=p["hint"],
             center_rows=p["M_display"],
             unit=unit,
+            grid_shrink=min_stretch(M),
         )
         L, R = lay.left, lay.right
 

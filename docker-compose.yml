@@ -1,0 +1,17 @@
+# docker compose up --build
+# Then open http://localhost:8000
+services:
+  app:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      # Fixture mode runs the whole pipeline with no API key and no network.
+      USE_FIXTURE: "${USE_FIXTURE:-1}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      - renders:/data
+      # Live-edit scenes and backend without rebuilding the image.
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+volumes:
+  renders:

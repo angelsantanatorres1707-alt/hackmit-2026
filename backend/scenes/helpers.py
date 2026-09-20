@@ -35,7 +35,6 @@ from manim import (
     BLACK,
     DashedLine,
     Difference,
-    GREY_B,
     Line,
     Rectangle,
     Scene,
@@ -55,8 +54,12 @@ from manim import (
 # green or red.
 # ---------------------------------------------------------------------------
 BG = "#000000"
-GRID = "#3B6CB7"
-AXIS = GREY_B
+# The grid was #3B6CB7 at 0.65 opacity: a 1px line of a dark blue on black
+# antialiases to roughly #26466f, which a projector renders as nothing at
+# all. Brighter + fatter + fewer lines (see ``panel``'s step) is the whole
+# legibility fix -- density is controlled by spacing, not by dimness.
+GRID = "#5E8FD8"
+AXIS = "#DCE0E6"      # was GREY_B (#BBBBBB) -- the axes ARE the structure
 I_HAT = "#83C167"
 J_HAT = "#FC6255"
 STUDENT = "#FFB020"   # amber: everything the student claimed, and the hint
@@ -95,17 +98,51 @@ def T(s: Any, **kwargs) -> Text:
 # ---------------------------------------------------------------------------
 # Layout constants
 # ---------------------------------------------------------------------------
-UNIT = 0.78           # scene units per math unit (x and y MUST share it)
+UNIT = 0.95           # scene units per math unit (x and y MUST share it)
+                      # (was 0.78 for a 4.6 box; the panels are bigger now,
+                      #  so the mathematics gets the extra room, not the
+                      #  margins -- a basis vector is now ~85px, not ~70px)
 PLANE_RADIUS = 7      # draw the plane far past the box; the matte clips
-PANEL_DX = 3.6
-PANEL_DY = -1.0
-BOX = 4.6
-TITLE_Y, HEAD_Y, MAT_Y, HINT_Y = 3.58, 2.82, 2.02, -3.66
+
+# The frame is 14.222 x 8.0 and this is judged across a room, so the panels
+# are pushed out to the gutters: 0.28 of margin at the sides, 0.82 between
+# them. The old 4.6 squares at dx=3.6 left 5 units -- 35% of the width --
+# empty. Panels are WIDER than tall because the frame is 16:9; ``fit_unit``
+# still measures against BOX (the height), which is the binding dimension.
+PANEL_DX = 3.62
+BOX_W = 6.42          # panel width
+BOX = 4.44            # panel height == the reference every fit_unit uses
+PANEL_DY = -0.74      # -> panel spans y in [-2.96, 1.48]
+
+TITLE_Y, HEAD_Y, MAT_Y, HINT_Y = 3.62, 2.90, 2.04, -3.66
+
+# The hint is anchored by its BOTTOM edge, not its centre, so that a hint
+# which wrapped to two lines grows upward into the gap instead of off the
+# bottom of the frame.
+HINT_BOTTOM_Y = -3.82   # 0.18 of clearance at the bottom of the frame
+HINT_MAX_H = 0.76       # two lines max, and the block grows upward
+
+# Font sizes, all in one place. Everything went up: a 22pt panel heading is
+# ~25px tall at 720p, which is a squint from the back of a room.
+FS_TITLE = 34
+FS_HEAD = 24
+FS_MAT = 29
+FS_HINT = 27
 
 Z_PLANE, Z_OVERLAY, Z_MATTE, Z_BORDER, Z_CHROME, Z_FLASH = 0, 5, 10, 11, 12, 13
 
-MAX_TITLE_W = 12.0
-MAX_HINT_W = 12.0
+# Nothing may ever be wider than this. config.frame_width is 14.222; the
+# remaining ~0.45 per side is deliberate gutter, because a projector's
+# overscan eats the edge of the frame and a caption cut off mid-word is the
+# single worst thing that can be on screen.
+FRAME_SAFE_W = 13.3
+MAX_TITLE_W = 13.0
+MAX_HINT_W = 12.6
+
+# Aim for this many grid cells across the widest panel dimension. More than
+# this and the lattice aliases into a grey wash at 720p; fewer and a shear
+# has nothing legible to act on.
+GRID_TARGET_CELLS = 10
 
 
 class SceneParamError(Exception):
@@ -271,21 +308,122 @@ def fmt_rows(M) -> list[list[str]]:
     return [[fmt_num(v) for v in row] for row in np.asarray(M, dtype=float).tolist()]
 
 
-def fit_text(t: VMobject, max_width: float) -> VMobject:
-    """Shrink a Text in place if it would run off frame. Cheap insurance
-    against an LLM-written title that is two words too long."""
-    if t.width > max_width:
-        t.scale(max_width / t.width)
+def wrap_words(s: str, max_chars: int) -> str:
+    """Greedy word wrap. Never splits a word -- a word broken across lines
+    reads as the clipping bug we are fixing."""
+    words = str(s).split()
+    if not words:
+        return str(s)
+    lines: list[str] = []
+    cur = ""
+    for w in words:
+        cand = w if not cur else cur + " " + w
+        if len(cand) <= max_chars or not cur:
+            cur = cand
+        else:
+            lines.append(cur)
+            cur = w
+    lines.append(cur)
+    return "\n".join(lines)
+
+
+def stack_lines(lines: Sequence[str], *, line_spacing: float = 0.2,
+                **kw) -> VGroup:
+    """Centre-aligned multi-line text on a uniform pitch.
+
+    manim's ``Text`` accepts "\\n" but Pango left-aligns the result, which
+    under a centred title reads as a ragged paragraph dumped in the frame.
+    Building the lines separately also lets the pitch come from one reference
+    glyph pair, so a line with no descender is not pulled closer to the next.
+    """
+    ref = T("Ag", **kw)
+    pitch = ref.height * (1.0 + float(line_spacing))
+    g = VGroup()
+    for i, ln in enumerate(lines):
+        m = T(ln if ln.strip() else " ", **kw)
+        m.move_to(np.array([0.0, -i * pitch, 0.0]))
+        g.add(m)
+    g.move_to(np.array([0.0, 0.0, 0.0]))
+    return g
+
+
+def fit_text(t: VMobject, max_width: float,
+             max_height: float | None = None) -> VMobject:
+    """HARD GUARANTEE: after this returns, ``t`` fits the box.
+
+    ``max_width`` is additionally clamped to ``FRAME_SAFE_W`` whatever the
+    caller asks for. An LLM writes the hints and nobody proofreads them, so
+    the one thing that must be impossible is a caption running off the edge
+    of the frame.
+    """
+    w = min(float(max_width), FRAME_SAFE_W)
+    if w > 0 and t.width > w:
+        t.scale(w / t.width)
+    if max_height is not None and max_height > 0 and t.height > max_height:
+        t.scale(max_height / t.height)
     return t
 
 
 def label_text(s: str, *, font_size: int = 24, color: str = CORRECT,
-               max_width: float = MAX_TITLE_W, weight=None) -> Text:
+               max_width: float = MAX_TITLE_W, weight=None,
+               max_lines: int = 1, max_height: float | None = None,
+               line_spacing: float = 0.2) -> Text:
+    """Build a Text that is guaranteed to fit, WRAPPING before it shrinks.
+
+    Shrinking alone is what produced a hint rendered at a size nobody could
+    read (or, worse, a 16-unit one-liner in a 14.2-unit frame). With
+    ``max_lines > 1`` the string is wrapped to the available width first and
+    scaling is only the backstop.
+    """
+    s = str(s)
     kw: dict[str, Any] = {"font_size": font_size, "color": color}
     if weight is not None:
         kw["weight"] = weight
     t = T(s, **kw)
-    return fit_text(t, max_width)
+    w = min(float(max_width), FRAME_SAFE_W)
+    if max_lines > 1 and t.width > w > 0 and len(s.split()) > 1:
+        # Estimate the character budget from the measured single-line width
+        # -- one extra Text build instead of one per candidate break.
+        per_char = t.width / max(len(s), 1)
+        budget = max(6, int(w / per_char))
+        lines = wrap_words(s, budget).split("\n")
+        # Greedy wrapping does not hit an exact line count (words do not
+        # divide evenly), so widen the budget until it does rather than
+        # computing it once and getting an orphan last word.
+        guard = 0
+        while len(lines) > max_lines and guard < 60:
+            budget = int(budget * 1.08) + 2
+            lines = wrap_words(s, budget).split("\n")
+            guard += 1
+        t = stack_lines(lines, line_spacing=line_spacing, **kw)
+    return fit_text(t, w, max_height)
+
+
+def title_text(s: str, *, color: str = CORRECT) -> Text:
+    """The scene title: one line, bold, as big as the frame allows.
+
+    Deliberately NOT wrapped: a second title line would land on the panel
+    headings. A title long enough to need one gets scaled instead, and the
+    planner already caps titles at 70 characters.
+    """
+    t = label_text(s, font_size=FS_TITLE, color=color, max_width=MAX_TITLE_W,
+                   weight="BOLD", max_lines=1, max_height=0.52)
+    t.move_to(np.array([0.0, TITLE_Y, 0.0]))
+    t.set_z_index(Z_CHROME)
+    return t
+
+
+def hint_text(s: str, *, color: str = STUDENT) -> Text:
+    """The positional hint, anchored by its BOTTOM edge.
+
+    Two lines are allowed and the block grows UPWARD, so a long hint can stay
+    at a readable size without ever reaching the bottom of the frame.
+    """
+    t = label_text(s, font_size=FS_HINT, color=color, max_width=MAX_HINT_W,
+                   weight="BOLD", max_lines=2, max_height=HINT_MAX_H)
+    t.move_to(np.array([0.0, HINT_BOTTOM_Y + t.height / 2.0, 0.0]))
+    t.set_z_index(Z_CHROME)
+    return t
 
 
 BANNED_HINT_PHRASES = (
@@ -475,7 +613,9 @@ class Panel:
     center: np.ndarray
     box: Rectangle
     unit: float
-    radius: float = PLANE_RADIUS
+    radius: float = PLANE_RADIUS      # x half-extent, in math units
+    radius_y: float = PLANE_RADIUS    # y half-extent, in math units
+    step: int = 1         # math units between MAJOR grid lines
 
     def pt(self, vec) -> np.ndarray:
         """Math coordinates -> scene coordinates inside this panel."""
@@ -483,45 +623,136 @@ class Panel:
         return self.origin + np.array([v[0] * self.unit, v[1] * self.unit, 0.0])
 
 
+def grid_step(box: float, unit: float, target: int = GRID_TARGET_CELLS) -> int:
+    """Math units between MAJOR grid lines, so the panel shows ~``target``
+    cells whatever ``fit_unit`` did to the scale.
+
+    This is the anti-moire knob. At 720p a cell narrower than about 45px is
+    two antialiased lines and a sliver of black, and a panel full of those
+    reads as flat grey -- the lattice stops being a lattice exactly when the
+    viewer needs to see what the transform did to it.
+    """
+    cells = float(box) / max(float(unit), 1e-6)
+    return max(1, int(math.ceil(cells / float(target))))
+
+
+def min_stretch(*mats, floor: float = 0.1) -> float:
+    """Smallest singular value over the given matrices.
+
+    That is exactly the worst-case factor by which a transform SQUEEZES the
+    spacing between parallel grid lines. A matrix like [[3,4],[1,2]] has
+    sigma_min = 0.37, so its image of a unit lattice is 2.7x tighter in one
+    direction than the lattice we drew -- which at 720p is the hairball of
+    near-parallel lines that made the determinant panel unreadable. Feed this
+    to ``grid_shrink`` and the step is chosen for the state the scene ENDS
+    in, not the one it starts in.
+    """
+    m = 1.0
+    for M in mats:
+        if M is None:
+            continue
+        A = np.asarray(M, dtype=float)
+        if A.ndim != 2 or A.shape[0] < 2 or A.shape[1] < 2:
+            continue
+        try:
+            sv = np.linalg.svd(A[:2, :2], compute_uv=False)
+        except Exception:  # noqa: BLE001
+            continue
+        if sv.size:
+            m = min(m, float(sv[-1]))
+    return float(max(floor, min(1.0, m)))
+
+
 def make_plane(center: np.ndarray, *, radius: float = PLANE_RADIUS,
                unit: float = UNIT, grid_color: str = GRID,
-               stroke_opacity: float = 0.65):
+               stroke_opacity: float = 0.9, step: int = 1,
+               stroke_width: float = 2.0, axis_color: str = AXIS,
+               axis_width: float = 3.4, radius_y: float | None = None):
     from manim.mobject.graphing.coordinate_systems import NumberPlane
 
+    # x and y may cover DIFFERENT numbers of units, but they must share one
+    # scene-units-per-math-unit or ApplyMatrix animates a conjugated matrix
+    # (RENDERING.md #2). That is why both lengths are built from ``unit``.
+    radius_y = radius if radius_y is None else radius_y
     length = 2 * radius * unit
+    length_y = 2 * radius_y * unit
+    # freq = step, faded_line_ratio = step  =>  lines are drawn every 1 math
+    # unit but only every step-th one is at full strength. The unit lattice
+    # survives as a whisper under a lattice you can actually see. step == 1
+    # (the common case) produces no faded lines at all.
+    ratio = int(step) if 1 <= step <= 2 else 1
     plane = NumberPlane(
-        x_range=[-radius, radius, 1],
-        y_range=[-radius, radius, 1],
+        x_range=[-radius, radius, step],
+        y_range=[-radius_y, radius_y, step],
         x_length=length,
-        y_length=length,
+        y_length=length_y,
         # No include_numbers / add_coordinates: axis labels are DecimalNumber
         # -> MathTex -> LaTeX. Unreadable at panel size anyway.
         background_line_style={
             "stroke_color": grid_color,
-            "stroke_width": 1.6,
+            "stroke_width": stroke_width,
             "stroke_opacity": stroke_opacity,
         },
-        axis_config={"stroke_color": AXIS, "stroke_width": 2.4},
+        faded_line_style={
+            "stroke_color": grid_color,
+            "stroke_width": stroke_width * 0.7,
+            "stroke_opacity": stroke_opacity * 0.3,
+        },
+        faded_line_ratio=ratio,
+        axis_config={"stroke_color": axis_color, "stroke_width": axis_width},
     )
     plane.move_to(center)
     return plane
 
 
 def panel(dx: float, *, radius: float | None = None, unit: float = UNIT,
-          dy: float = PANEL_DY, box: float = BOX, box_h: float | None = None) -> Panel:
+          dy: float = PANEL_DY, box: float = BOX_W,
+          box_h: float | None = None, step: int | None = None,
+          max_reach: float | None = None, grid_shrink: float = 1.0) -> Panel:
+    """``box`` is the panel WIDTH, ``box_h`` its height (default: square).
+
+    ``max_reach`` caps how far, IN SCENE UNITS, the plane may be drawn to
+    either side of its centre. In a two-panel layout that cap is the distance
+    to the other panel's near edge: the matte has a hole over each panel, so
+    a plane drawn wide enough to reach the neighbour draws straight through
+    it and the two lattices superimpose.
+    """
     center = np.array([dx, dy, 0.0])
-    if radius is None:
-        # Always DRAW the plane past the visible box -- the matte clips it --
-        # otherwise a shear pulls the grid lines apart and leaves the box with
-        # four lonely lines in it. When fit_unit has shrunk the unit, a fixed
-        # radius no longer reaches the box edge, so scale the radius with it.
-        need = math.ceil((max(box, box_h or box) / 2 + 1.0) / max(unit, 1e-6))
-        radius = int(min(20, max(PLANE_RADIUS, need)))
-    plane = make_plane(center, radius=radius, unit=unit)
+    bw = float(box)
+    bh = float(box_h if box_h is not None else box)
+    if step is None:
+        span_ = max(bw, bh)
+        # Size the lattice for the SQUEEZED state (see ``min_stretch``)...
+        step = grid_step(span_, unit * max(float(grid_shrink), 1e-3))
+        # ...but never so coarse that the untransformed panel starts out with
+        # fewer than ~3 cells across it and stops reading as a grid at all.
+        step = max(1, min(step, int(math.floor(span_ / max(3.0 * unit, 1e-6))) or 1))
+
+    def _snap(reach: float) -> int:
+        """Scene-unit reach -> whole math radius, rounded DOWN onto ``step``
+        so the lattice stays symmetric about the origin."""
+        n = int(math.floor(max(reach, 0.0) / max(unit, 1e-6)))
+        n = int(step * math.floor(n / float(step)))
+        return max(step, min(24, n))
+
+    if radius is not None:
+        rx = ry = int(radius)
+    else:
+        # Draw the plane PAST the visible box -- the matte clips it -- or a
+        # shear pulls the grid lines apart and leaves the box with four
+        # lonely lines in it. Vertically there is no neighbour to bleed into,
+        # so y gets the generous radius; x is capped by ``max_reach``.
+        ry = _snap(bh / 2 + 3.4)
+        rx = _snap(bw / 2 + 3.4)
+        if max_reach is not None:
+            rx = min(rx, _snap(max_reach))
+        # ...but never so small that the panel starts out half empty.
+        rx = max(rx, int(step * math.ceil(((bw / 2 + 0.15) / unit) / float(step))))
+    plane = make_plane(center, radius=rx, radius_y=ry, unit=unit, step=step)
     plane.set_z_index(Z_PLANE)
-    rect = Rectangle(width=box, height=box_h if box_h is not None else box).move_to(center)
+    rect = Rectangle(width=bw, height=bh).move_to(center)
     return Panel(plane=plane, origin=plane.get_origin(), center=center, box=rect,
-                 unit=unit, radius=radius)
+                 unit=unit, radius=rx, radius_y=ry, step=step)
 
 
 def panel_matte(*panel_rects: Rectangle) -> VMobject:
@@ -543,11 +774,13 @@ def ghost_plane(p: Panel) -> Any:
     # Same radius as the panel's own plane. With a fixed radius the reference
     # grid stops short of the box and reads as a grey rectangle floating in
     # the middle of the panel instead of as the original grid.
-    g = make_plane(p.center, radius=p.radius, unit=p.unit,
-                   grid_color=GHOST, stroke_opacity=0.32)
+    g = make_plane(p.center, radius=p.radius, radius_y=p.radius_y,
+                   unit=p.unit, step=p.step,
+                   grid_color=GHOST, stroke_opacity=0.45, stroke_width=1.8,
+                   axis_color=GHOST, axis_width=2.2)
     g.set_z_index(Z_PLANE - 1)
     for m in g.get_family():
-        m.set_stroke(opacity=min(0.34, m.get_stroke_opacity()))
+        m.set_stroke(opacity=min(0.45, m.get_stroke_opacity()))
     return g
 
 
@@ -573,7 +806,8 @@ def two_panel_layout(scene: Scene, *, title: str, student_label: str,
                      student_rows=None, correct_rows=None, center_rows=None,
                      ghost_reference: bool = False, unit: float = UNIT,
                      dx: float = PANEL_DX, dy: float = PANEL_DY,
-                     box: float = BOX) -> Layout:
+                     box: float = BOX_W, box_h: float = BOX,
+                     grid_shrink: float = 1.0) -> Layout:
     """Build + z-index + add the chrome shared by five templates.
 
     Adds the matte and the borders to the scene (they must be present from
@@ -585,41 +819,68 @@ def two_panel_layout(scene: Scene, *, title: str, student_label: str,
     the numbers. ``student_rows`` is the student's own work and is always
     shown. See ``reveal_correct_values``.
     """
-    L = panel(-dx, unit=unit, dy=dy, box=box)
-    R = panel(+dx, unit=unit, dy=dy, box=box)
+    # How far either plane may be drawn sideways before it reaches the other
+    # panel's hole in the matte.
+    reach = 2 * dx - box / 2 - 0.08
+    L = panel(-dx, unit=unit, dy=dy, box=box, box_h=box_h, max_reach=reach,
+              grid_shrink=grid_shrink)
+    R = panel(+dx, unit=unit, dy=dy, box=box, box_h=box_h, max_reach=reach,
+              grid_shrink=grid_shrink)
+
+    # ---- cross-panel bleed ------------------------------------------------
+    # The matte has a HOLE over each panel and cairo cannot clip, so once
+    # ApplyMatrix carries the student's lattice across the frame it draws
+    # straight through the reference panel. (Verified: with an IDENTITY
+    # reference, the right panel came out full of the left panel's
+    # diagonals.) ``max_reach`` above fixes the untransformed case; this
+    # opaque shield, slipped BETWEEN the two planes, fixes the transformed
+    # one. Painter's algorithm cannot break both directions of the tie -- a
+    # mask that hides plane_R inside the left box also hides plane_L -- so
+    # the REFERENCE panel is the one kept clean, because it is the thing
+    # being compared against and it has to be unambiguous.
+    L.plane.set_z_index(Z_PLANE - 2)
+    shield = Rectangle(width=box, height=box_h).move_to(R.center)
+    shield.set_fill(BLACK, opacity=1).set_stroke(width=0)
+    shield.set_z_index(Z_PLANE - 1)
+    R.plane.set_z_index(Z_PLANE)
 
     matte = panel_matte(L.box, R.box).set_z_index(Z_MATTE)
     borders = VGroup(
-        L.box.copy().set_stroke(STUDENT, 2.0, opacity=0.55),
-        R.box.copy().set_stroke(CORRECT, 2.0, opacity=0.45),
+        L.box.copy().set_stroke(STUDENT, 3.0, opacity=0.9),
+        R.box.copy().set_stroke(CORRECT, 3.0, opacity=0.75),
     ).set_z_index(Z_BORDER)
 
-    title_m = label_text(title, font_size=32, color=CORRECT, max_width=MAX_TITLE_W)
-    title_m.move_to(np.array([0.0, TITLE_Y, 0.0]))
-    l_head = label_text(student_label, font_size=22, color=STUDENT, max_width=5.4)
+    title_m = title_text(title)
+    # With a matrix parked at x = 0 the headings must not reach the centre,
+    # or "WHAT AN EIGENVECTOR DOES" runs straight into its right bracket.
+    head_w = box - 0.25 if center_rows is None else min(box - 0.25, 2 * dx - 1.9)
+    l_head = label_text(student_label, font_size=FS_HEAD, color=STUDENT,
+                        max_width=head_w, weight="BOLD")
     l_head.move_to(np.array([-dx, HEAD_Y, 0.0]))
-    r_head = label_text(reference_label(correct_label), font_size=22,
-                        color=CORRECT, max_width=5.4)
+    r_head = label_text(reference_label(correct_label), font_size=FS_HEAD,
+                        color=CORRECT, max_width=head_w, weight="BOLD")
     r_head.move_to(np.array([dx, HEAD_Y, 0.0]))
 
     l_mat = r_mat = center_mat = None
     if center_rows is not None:
         # The GIVEN matrix, not an answer: the student is allowed to read it.
-        center_mat = TextMatrix(center_rows, color=CORRECT, font_size=26)
-        center_mat.move_to(np.array([0.0, MAT_Y + 0.55, 0.0]))
+        center_mat = TextMatrix(center_rows, color=CORRECT, font_size=FS_MAT)
+        # Same row as the per-panel matrices when there are none to clash
+        # with, so it clears the heading row above it.
+        center_mat.move_to(np.array([
+            0.0, MAT_Y + (0.42 if (student_rows or correct_rows) else 0.0), 0.0]))
     if student_rows is not None:
-        l_mat = TextMatrix(student_rows, color=STUDENT, font_size=26)
+        l_mat = TextMatrix(student_rows, color=STUDENT, font_size=FS_MAT)
         l_mat.move_to(np.array([-dx, MAT_Y, 0.0]))
     if correct_rows is not None:
         if reveal_correct_values():
-            r_mat = TextMatrix(correct_rows, color=CORRECT, font_size=26)
+            r_mat = TextMatrix(correct_rows, color=CORRECT, font_size=FS_MAT)
         else:
             r_mat = TextMatrix(mask_rows(correct_rows), color=MASK_COLOR,
-                               font_size=26)
+                               font_size=FS_MAT)
         r_mat.move_to(np.array([dx, MAT_Y, 0.0]))
 
-    hint_m = label_text(hint, font_size=24, color=STUDENT, max_width=MAX_HINT_W)
-    hint_m.move_to(np.array([0.0, HINT_Y, 0.0]))
+    hint_m = hint_text(hint)
 
     for m in (title_m, l_head, r_head, l_mat, r_mat, center_mat, hint_m):
         if m is not None:
@@ -627,33 +888,37 @@ def two_panel_layout(scene: Scene, *, title: str, student_label: str,
 
     ghosts = None
     if ghost_reference:
-        ghosts = VGroup(ghost_plane(L), ghost_plane(R))
+        g_l, g_r = ghost_plane(L), ghost_plane(R)
+        g_l.set_z_index(Z_PLANE - 3)      # under the left plane
+        g_r.set_z_index(Z_PLANE - 0.5)    # over the shield, under the right plane
+        ghosts = VGroup(g_l, g_r)
 
-    scene.add(matte, borders)
+    scene.add(matte, borders, shield)
     return Layout(left=L, right=R, panels=[L, R], matte=matte, borders=borders,
                   title=title_m, l_head=l_head, r_head=r_head, l_mat=l_mat,
                   r_mat=r_mat, center_mat=center_mat, hint=hint_m, ghosts=ghosts)
 
 
-def one_panel_layout(scene: Scene, *, title: str, hint: str, dx: float = -2.4,
-                     dy: float = -0.7, box: float = 5.2, unit: float = UNIT,
-                     border_color: str = GHOST) -> Layout:
+def one_panel_layout(scene: Scene, *, title: str, hint: str, dx: float = -3.58,
+                     dy: float = 0.10, box: float = 6.4,
+                     box_h: float | None = 6.0, unit: float = UNIT,
+                     border_color: str = GHOST,
+                     grid_shrink: float = 1.0) -> Layout:
     """Single plane on the left, room for a scoreboard on the right.
 
     Used by the templates whose comparison is number-vs-number or
     same-space (T4, T5, T6 solution mode, T7) rather than panel-vs-panel.
+    ``box`` is the WIDTH, ``box_h`` the height -- with no second panel the
+    plane can take the full height between the title and the hint.
     """
-    P = panel(dx, unit=unit, dy=dy, box=box)
+    P = panel(dx, unit=unit, dy=dy, box=box, box_h=box_h,
+              grid_shrink=grid_shrink)
     matte = panel_matte(P.box).set_z_index(Z_MATTE)
-    borders = VGroup(P.box.copy().set_stroke(border_color, 2.0, opacity=0.5))
+    borders = VGroup(P.box.copy().set_stroke(border_color, 3.0, opacity=0.75))
     borders.set_z_index(Z_BORDER)
 
-    title_m = label_text(title, font_size=32, color=CORRECT, max_width=MAX_TITLE_W)
-    title_m.move_to(np.array([0.0, TITLE_Y, 0.0]))
-    hint_m = label_text(hint, font_size=24, color=STUDENT, max_width=MAX_HINT_W)
-    hint_m.move_to(np.array([0.0, HINT_Y, 0.0]))
-    title_m.set_z_index(Z_CHROME)
-    hint_m.set_z_index(Z_CHROME)
+    title_m = title_text(title)
+    hint_m = hint_text(hint)
 
     scene.add(matte, borders)
     return Layout(left=P, panels=[P], matte=matte, borders=borders,
@@ -665,7 +930,7 @@ def one_panel_layout(scene: Scene, *, title: str, hint: str, dx: float = -2.4,
 # ---------------------------------------------------------------------------
 
 def arrow_at(origin: np.ndarray, vec, color: str, *, unit: float = UNIT,
-             stroke_width: float = 6.0) -> Arrow:
+             stroke_width: float = 8.0) -> Arrow:
     """Arrow from a panel origin along ``vec`` (math units)."""
     v = np.asarray(vec, dtype=float).flatten()
     end = origin + np.array([v[0] * unit, v[1] * unit, 0.0])
@@ -676,15 +941,15 @@ def arrow_at(origin: np.ndarray, vec, color: str, *, unit: float = UNIT,
         d = d / n if n > 1e-9 else np.array([1.0, 0.0, 0.0])
         end = origin + 0.06 * d
     return Arrow(origin, end, buff=0, color=color, stroke_width=stroke_width,
-                 max_tip_length_to_length_ratio=0.28,
-                 max_stroke_width_to_length_ratio=9)
+                 max_tip_length_to_length_ratio=0.3,
+                 max_stroke_width_to_length_ratio=11)
 
 
 class VecArrow:
     """An arrow that remembers the math vector it currently represents, so a
     multi-stage template can keep composing transforms on it."""
 
-    def __init__(self, panel_: Panel, vec, color: str, *, stroke_width: float = 6.0):
+    def __init__(self, panel_: Panel, vec, color: str, *, stroke_width: float = 8.0):
         self.panel = panel_
         self.vec = np.asarray(vec, dtype=float).flatten()[:2].astype(float)
         self.color = color
@@ -760,9 +1025,9 @@ def signed_area(poly, unit: float = 1.0) -> float:
     return a / (unit * unit)
 
 
-def scoreboard(rows: Sequence[tuple], *, anchor, label_size: int = 19,
-               value_size: int = 34, row_buff: float = 0.52,
-               max_width: float = 4.4) -> VGroup:
+def scoreboard(rows: Sequence[tuple], *, anchor, label_size: int = 22,
+               value_size: int = 42, row_buff: float = 0.56,
+               max_width: float = 5.3) -> VGroup:
     """[(label, value, color)] -> a stacked two-line-per-row readout block.
 
     How "student's claim vs true value" appears in the single-plane
@@ -770,9 +1035,10 @@ def scoreboard(rows: Sequence[tuple], *, anchor, label_size: int = 19,
     """
     group = VGroup()
     for label, value, color in rows:
-        lab = fit_text(T(label, font_size=label_size, color=GHOST), max_width)
+        lab = fit_text(T(label, font_size=label_size, color=GHOST,
+                         weight="BOLD"), max_width)
         val = fit_text(T(value, font_size=value_size, color=color), max_width)
-        val.next_to(lab, DOWN, buff=0.12)
+        val.next_to(lab, DOWN, buff=0.14)
         group.add(VGroup(lab, val))
     group.arrange(DOWN, buff=row_buff, aligned_edge=LEFT)
     group.move_to(anchor)

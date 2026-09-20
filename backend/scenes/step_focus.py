@@ -37,6 +37,7 @@ from manim import (
     DashedVMobject,
     FadeIn,
     FadeOut,
+    Flash,
     Indicate,
     LaggedStart,
     Line,
@@ -52,15 +53,17 @@ from helpers import (  # noqa: E402
     GHOST,
     PROBE,
     STUDENT,
-    TITLE_Y,
-    HINT_Y,
     ParamScene,
     T,
     TextMatrix,
     Z_CHROME,
     Z_FLASH,
     check_hint,
+    hint_text,
     label_text,
+    title_text,
+    MASK,
+    reveal_correct_values,
 )
 
 MAX_LINES = 6
@@ -179,10 +182,8 @@ class StaticStepHighlight(ParamScene):
 
     # ------------------------------------------------------------------
     def build_scene(self, p: dict) -> None:
-        title = label_text(p["title"], font_size=32, color=CORRECT)
-        title.move_to(np.array([0.0, TITLE_Y, 0.0])).set_z_index(Z_CHROME)
-        hint = label_text(p["hint"], font_size=24, color=STUDENT)
-        hint.move_to(np.array([0.0, HINT_Y, 0.0])).set_z_index(Z_CHROME)
+        title = title_text(p["title"])
+        hint = hint_text(p["hint"])
         try:
             if p.get("pairing"):
                 self._pairing(p, title, hint)
@@ -193,7 +194,8 @@ class StaticStepHighlight(ParamScene):
             # titled, hinted video rather than no video at all.
             self.clear()
             note = label_text(p.get("annotation") or "your work",
-                              font_size=26, color=CORRECT)
+                              font_size=30, color=CORRECT, max_lines=2,
+                              max_height=1.2)
             self.add(title)
             self.play(FadeIn(note), run_time=1.0)
             self.wait(1.0)
@@ -214,15 +216,15 @@ class StaticStepHighlight(ParamScene):
                 else:
                     rendered.append(VGroup(mat))
             else:
-                rendered.append(VGroup(T(ln["text"], font_size=28, color=CORRECT)))
+                rendered.append(VGroup(T(ln["text"], font_size=32, color=CORRECT)))
 
         stack = VGroup(*rendered)
-        stack.arrange(np.array([0.0, -1.0, 0.0]), buff=0.52)
-        if stack.height > 3.6:
-            stack.scale(3.6 / stack.height)
-        if stack.width > 11.0:
-            stack.scale(11.0 / stack.width)
-        stack.move_to(np.array([0.0, 0.55, 0.0]))
+        stack.arrange(np.array([0.0, -1.0, 0.0]), buff=0.58)
+        if stack.height > 4.6:
+            stack.scale(4.6 / stack.height)
+        if stack.width > 12.6:
+            stack.scale(12.6 / stack.width)
+        stack.move_to(np.array([0.0, 0.42, 0.0]))
 
         # -- 0.0 / 1.0 --------------------------------------------------
         self.play(FadeIn(title), run_time=1.0)
@@ -252,8 +254,9 @@ class StaticStepHighlight(ParamScene):
 
         # -- 5.6 / 0.8 --------------------------------------------------
         if p["annotation"]:
-            ann = label_text(p["annotation"], font_size=24, color=PROBE)
-            ann.move_to(np.array([0.0, -2.45, 0.0])).set_z_index(Z_CHROME)
+            ann = label_text(p["annotation"], font_size=26, color=PROBE,
+                             max_width=12.0, max_lines=2, max_height=0.72)
+            ann.move_to(np.array([0.0, -2.72, 0.0])).set_z_index(Z_CHROME)
             self.play(FadeIn(ann), run_time=0.8)
         else:
             self.wait(0.8)
@@ -334,11 +337,21 @@ class StaticStepHighlight(ParamScene):
                          CORRECT)
         self.play(MoveAlongPath(d1[0], d1[1]), MoveAlongPath(d2[0], d2[1]),
                   FadeIn(d1[2]), FadeIn(d2[2]), run_time=1.3)
-        good = T(pr["correct_entry"], font_size=28, color=CORRECT).move_to(cell)
+        # ``correct_entry`` is the value of that cell -- the answer. The
+        # lesson of this mode is purely positional (WHICH row pairs with
+        # WHICH column), and the two sweeps have just shown it, so the value
+        # lands as a "?" and the student multiplies it out themselves. A
+        # Flash marks the landing, because the glyph is unchanged from the
+        # placeholder already in the result matrix.
+        reveal = reveal_correct_values()
+        good = T(pr["correct_entry"] if reveal else MASK, font_size=28,
+                 color=CORRECT).move_to(cell)
         good.set_z_index(Z_FLASH)
+        land = [] if reveal else [Flash(cell, color=CORRECT, line_length=0.14,
+                                        flash_radius=0.45)]
         self.play(FadeOut(result.entry(i, j)), FadeIn(good, scale=1.6),
                   FadeOut(d1[0]), FadeOut(d2[0]), FadeOut(d1[2]), FadeOut(d2[2]),
-                  run_time=0.7)
+                  *land, run_time=0.7)
 
         # -- 4.0 / 2.0  student pairing: the second sweep runs ACROSS ---
         if pr["wrong_source"] == "col":

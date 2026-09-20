@@ -30,6 +30,7 @@ import numpy as np
 from manim import (
     ApplyMatrix,
     Create,
+    DOWN,
     FadeIn,
     Flash,
     Line,
@@ -60,6 +61,7 @@ from helpers import (  # noqa: E402
     as_matrix,
     check_hint,
     fit_unit,
+    min_stretch,
     fmt_num,
     fmt_rows,
     iso_project,
@@ -74,9 +76,14 @@ from helpers import (  # noqa: E402
     signed_area,
 )
 
-PLANE_DX = -2.5
-PLANE_BOX = 5.2
-BOARD_X = 3.9
+# The plane used to be a 5.2 square at x=-2.5 with the scoreboard at 3.9,
+# which left 2 units of dead frame on the left and a panel only 65% of the
+# frame height. The frame is 16:9; so is the panel now.
+PLANE_DX = -3.58
+PLANE_BOX = 6.0        # HEIGHT -- what fit_unit and the in-panel captions use
+PLANE_BOX_W = 6.4      # WIDTH
+PLANE_DY = 0.10
+BOARD_X = 3.45
 
 
 class DeterminantAreaCompare(ParamScene):
@@ -148,7 +155,12 @@ class DeterminantAreaCompare(ParamScene):
                         box=PLANE_BOX)
 
         lay = one_panel_layout(self, title=p["title"], hint=p["hint"],
-                               dx=PLANE_DX, dy=-0.7, box=PLANE_BOX, unit=unit)
+                               dx=PLANE_DX, dy=PLANE_DY, box=PLANE_BOX_W,
+                               box_h=PLANE_BOX, unit=unit,
+                               # [[3,4],[1,2]] squeezes the lattice by 2.7x in
+                               # one direction; without this the panel ends the
+                               # scene as a hairball of near-parallel lines.
+                               grid_shrink=min_stretch(M))
         P = lay.left
 
         # The live counter ticks to det(M), which IS the answer, so it is only
@@ -236,7 +248,11 @@ class DeterminantAreaCompare(ParamScene):
         if flips:
             turned = label_text("the sheet turned over", font_size=20,
                                 color=PROBE, max_width=4.6)
-            turned.move_to(np.array([BOARD_X, -0.95, 0.0])).set_z_index(Z_CHROME)
+            # Hung off the board, not a fixed y: the board's own height
+            # moves with the font scale, and a fixed y lands this caption on
+            # top of the area readout.
+            turned.next_to(board, DOWN, buff=0.34)
+            turned.set_z_index(Z_CHROME)
             flash.append(FadeIn(turned))
         self.play(*flash, run_time=0.6)
 
@@ -283,7 +299,8 @@ class DeterminantAreaCompare(ParamScene):
                         [iso_project(v)[:2] for v in cube], box=PLANE_BOX)
 
         lay = one_panel_layout(self, title=p["title"], hint=p["hint"],
-                               dx=PLANE_DX, dy=-0.7, box=PLANE_BOX, unit=unit)
+                               dx=PLANE_DX, dy=PLANE_DY, box=PLANE_BOX_W,
+                               box_h=PLANE_BOX, unit=unit)
         P = lay.left
         self.remove(P.plane)  # a square grid under an iso solid reads wrong
 

@@ -65,9 +65,14 @@ from helpers import (  # noqa: E402
     scoreboard,
 )
 
-PLANE_DX = -2.5
-PLANE_BOX = 5.2
-BOARD_X = 3.9
+# The plane used to be a 5.2 square at x=-2.5 with the scoreboard at 3.9,
+# which left 2 units of dead frame on the left and a panel only 65% of the
+# frame height. The frame is 16:9; so is the panel now.
+PLANE_DX = -3.58
+PLANE_BOX = 6.0        # HEIGHT -- what fit_unit and the in-panel captions use
+PLANE_BOX_W = 6.4      # WIDTH
+PLANE_DY = 0.10
+BOARD_X = 3.45
 DOT_COLORS = (I_HAT, J_HAT, PROBE)
 
 
@@ -175,12 +180,13 @@ class SpanCompare(ParamScene):
         unit = fit_unit(span_pts + ([probe] if probe is not None else []),
                         box=PLANE_BOX)
         lay = one_panel_layout(self, title=p["title"], hint=p["hint"],
-                               dx=PLANE_DX, dy=-0.7, box=PLANE_BOX, unit=unit)
+                               dx=PLANE_DX, dy=PLANE_DY, box=PLANE_BOX_W,
+                               box_h=PLANE_BOX, unit=unit)
         P = lay.left
 
         board = scoreboard([("YOUR CLAIM", _dim_word(p["claimed_dim"]), STUDENT)],
                            anchor=np.array([BOARD_X, 1.0, 0.0]),
-                           label_size=19, value_size=30)
+                           label_size=22, value_size=38)
 
         # Dependent inputs are collinear by construction, so the later arrow
         # would sit exactly on top of the earlier one: step the widths down so
@@ -260,7 +266,7 @@ class SpanCompare(ParamScene):
         resolved = scoreboard(
             [("YOUR CLAIM", _dim_word(p["claimed_dim"]), STUDENT),
              _reached_row(p["actual_dim"])],
-            anchor=np.array([BOARD_X, 0.6, 0.0]), label_size=19, value_size=30)
+            anchor=np.array([BOARD_X, 0.6, 0.0]), label_size=22, value_size=38)
         self.play(Transform(board, resolved), run_time=0.6)
 
         # -- 9.0 / 1.4 --------------------------------------------------
@@ -282,7 +288,8 @@ class SpanCompare(ParamScene):
         unit = min(2.0, (PLANE_BOX / 2) * 0.86 / extent)
 
         lay = one_panel_layout(self, title=p["title"], hint=p["hint"],
-                               dx=PLANE_DX, dy=-0.7, box=PLANE_BOX, unit=unit)
+                               dx=PLANE_DX, dy=PLANE_DY, box=PLANE_BOX_W,
+                               box_h=PLANE_BOX, unit=unit)
         P = lay.left
         self.remove(P.plane)
 
@@ -297,7 +304,7 @@ class SpanCompare(ParamScene):
 
         board = scoreboard([("YOUR CLAIM", _dim_word(p["claimed_dim"]), STUDENT)],
                            anchor=np.array([BOARD_X, 1.0, 0.0]),
-                           label_size=19, value_size=30)
+                           label_size=22, value_size=38)
 
         arrows = [arrow_at(origin, ipt(v)[:2] - origin[:2], DOT_COLORS[k % 3],
                            unit=1.0, stroke_width=6) for k, v in enumerate(V)]
@@ -340,7 +347,7 @@ class SpanCompare(ParamScene):
         resolved = scoreboard(
             [("YOUR CLAIM", _dim_word(p["claimed_dim"]), STUDENT),
              _reached_row(p["actual_dim"])],
-            anchor=np.array([BOARD_X, 0.6, 0.0]), label_size=19, value_size=30)
+            anchor=np.array([BOARD_X, 0.6, 0.0]), label_size=22, value_size=38)
         self.play(Transform(board, resolved), run_time=0.6)
         self.play(Write(lay.hint), run_time=1.0)
         self.wait(0.6)

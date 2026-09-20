@@ -1,0 +1,21 @@
+# Render.com blueprint: connect the repo and it picks this up.
+# Note the free tier sleeps after 15 min and has 0.1 CPU - too slow to render.
+# Use at least a Standard instance.
+services:
+  - type: web
+    name: manimhint
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    healthCheckPath: /api/health
+    envVars:
+      - key: RENDER_CACHE_DIR
+        value: /data/cache
+      - key: RENDER_WORK_DIR
+        value: /data/jobs
+      - key: ANTHROPIC_API_KEY
+        sync: false          # set this in the dashboard, never in the repo
+    disk:
+      name: manimhint-data
+      mountPath: /data
+      sizeGB: 1

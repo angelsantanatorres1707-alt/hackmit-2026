@@ -202,13 +202,16 @@ class DeriskSideBySide(Scene):
         l_head = Text("WHAT YOU WROTE", font_size=22, color=YELLOW).move_to(
             np.array([-PANEL_DX, 2.82, 0.0])
         )
-        r_head = Text("WHAT THE STEP SHOULD DO", font_size=22, color=GREEN).move_to(
+        # The reference side is the TARGET, not an answer key: no heading and
+        # no numbers that hand the student the correction. See
+        # REVEAL_CORRECT_VALUES in common.py -- the real templates gate this.
+        r_head = Text("WHAT THE PROBLEM ASKS FOR", font_size=22, color=GREEN).move_to(
             np.array([PANEL_DX, 2.82, 0.0])
         )
         l_mat = text_matrix([["2", "1"], ["0", "1"]], color=YELLOW).move_to(
             np.array([-PANEL_DX, 2.02, 0.0])
         )
-        r_mat = text_matrix([["2", "-1"], ["0", "1"]], color=GREEN).move_to(
+        r_mat = text_matrix([["?", "?"], ["?", "?"]], color=GREY_B).move_to(
             np.array([PANEL_DX, 2.02, 0.0])
         )
         hint = Text(

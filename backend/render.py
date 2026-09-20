@@ -17,6 +17,7 @@ template correctly invalidates the old video.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import os
@@ -96,9 +97,41 @@ def available_templates() -> list[str]:
             continue
         names.update(_CLASS_DEF.findall(src))
         if path.name in ("__init__.py", "registry.py"):
-            names.update(_DICT_KEY.findall(src))
+            names.update(_registry_keys(src))
     names.discard("ParamScene")
     return sorted(names)
+
+
+_REGISTRY_NAMES = ("TEMPLATES", "REGISTRY", "SCENES", "SCHEMAS", "PARAM_SCHEMAS")
+
+
+def _registry_keys(src: str) -> set[str]:
+    """Top-level keys of the registry mappings, and nothing else.
+
+    A flat regex over every quoted dict key also picks up the keys *inside* each
+    entry - "quality", "media_dir", "module", "file" - and every param name in a
+    nested schema, so /api/health advertised 'quality' and 'actual_det' as
+    renderable templates. Parse instead, and descend exactly one level. Still no
+    import, so this stays safe against a scene module that is mid-edit.
+    """
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return set()
+
+    keys: set[str] = set()
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        if not any(t in _REGISTRY_NAMES for t in targets):
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        for key in node.value.keys:
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                keys.add(key.value)
+    return keys
 
 
 def _scan_scene_classes() -> dict[str, Any]:
