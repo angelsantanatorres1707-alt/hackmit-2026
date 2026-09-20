@@ -236,6 +236,13 @@ HINTS: dict[str, tuple[str, str]] = {
     "LA27": ("How many solutions there are is settled by how many independent conditions "
              "the rows really impose, against how many unknowns there are. Compare those "
              "two counts in {step}.", "compare conditions against unknowns"),
+    "LA28": ("A vector can sit on an eigen-line and still belong to a different "
+             "stretch. Watch how far along its own line {step} sends it, against how "
+             "far the eigenvalue you paired it with would.",
+             "watch how far along its line it lands"),
+    "LA29": ("Coordinates in a basis are the amounts of each basis vector you need to "
+             "rebuild the vector -- not the vector's own entries. Watch where your "
+             "amounts actually land in {step}.", "watch where your amounts land"),
 }
 
 GENERIC_BASIS = ("Watch where the {which} basis vector lands in {step}.",
@@ -510,6 +517,8 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
         "LA20": _vector_op, "LA21": _vector_op,
         "LA22": _angle_property, "LA23": _angle_property,
         "LA24": _grid_order,
+        "LA28": _eigen_vector,
+        "LA29": _span_rebuild,
         "LA12": _line_system, "LA13": _line_system,
         "LA14": _span, "LA15": _span,
     }.get(eid or "", _grid_single)
@@ -925,6 +934,36 @@ def _images(env: dict):
     if not all(abs(x) < 1e6 for x in a + b):
         return None, None
     return a, b
+
+
+def _span_rebuild(verdict, ext, env, S, C):
+    """LA29: the claimed coordinates, used as weights, against the vector itself.
+
+    Drawn with the vector-op comparison rather than a bespoke scene: the
+    readouts say plainly that one combination lands on v and the other does not,
+    without ever printing the coordinates that would be the answer.
+    """
+    basis = [_flat(env.get(n)) for n in sorted(env) if re.fullmatch(r"b\d+", n, re.I)]
+    basis = [b for b in basis if b]
+    target = _flat(env.get("v")) or _flat(env.get("x")) or _flat(env.get("w"))
+    claimed, correct = _flat(S), _flat(C)
+    if len(basis) != 2 or not target or not claimed or not correct:
+        raise SceneUnavailable("no basis pair and vector to rebuild")
+    if len({len(basis[0]), len(basis[1]), len(target)}) != 1 or len(target) not in (2, 3):
+        raise SceneUnavailable("the basis and the vector are not the same drawable size")
+    if len(claimed) != 2:
+        raise SceneUnavailable("the claimed coordinates are not a pair of weights")
+    built = [claimed[0] * basis[0][i] + claimed[1] * basis[1][i] for i in range(len(target))]
+    return "VectorOpCompare", {
+        "op": "generic", "u": basis[0], "v": basis[1],
+        "w_claimed": built, "w_correct": target,
+        "labels": {"u": "b1", "v": "b2"},
+        "readouts": [["where your amounts land", "not v"],
+                     ["where the coordinates must land", "v"]],
+        "ambient": len(target),
+        "student_label": "YOUR AMOUNTS, REBUILT",
+        "correct_label": "THE VECTOR THEY MUST REBUILD",
+    }
 
 
 def _line_system(verdict, ext, env, S, C):

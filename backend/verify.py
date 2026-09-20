@@ -703,7 +703,21 @@ def _projection_setup(env: dict) -> tuple:
     target = "b" if "b" in rest else (rest[0] if len(rest) == 1 else None)
     if target is None:
         return None, [], []
-    return vecs[target], [vecs[n] for n in span_names], span_names
+
+    basis = [vecs[n] for n in span_names]
+    # A "span" that already fills the whole space is not a subspace to project
+    # onto: the projection is the identity, the residual is zero however the
+    # student got there, and the check can never mean anything. This guard is
+    # what stops a change-of-basis page -- b1, b2 spanning R^2 and a vector v --
+    # from being diagnosed as a projection error, which is a video that
+    # confidently teaches the wrong concept.
+    try:
+        A = sp.Matrix.hstack(*basis)
+        if A.rank() >= A.rows:
+            return None, [], []
+    except Exception:  # noqa: BLE001
+        return None, [], []
+    return vecs[target], basis, span_names
 
 
 def _inv(m):
@@ -868,6 +882,47 @@ def _orient_for_product(a, b, va: Optional[Val], vb: Optional[Val]):
     return a, b
 
 
+def _coordinate_target(step: Step, env: dict[str, Val]) -> Optional[Val]:
+    """The true B-coordinates, when this line claims to state them."""
+    text = " ".join(filter(None, [step.raw_text or "",
+                                  getattr(step.value, "text", "") or ""]))
+    if not text.strip() or not _COORD_CLAIM.search(text):
+        return None
+    basis, target = _basis_family(env)
+    if basis is None or target is None:
+        return None
+    try:
+        return wrap(sp.Matrix.hstack(*basis).solve(target))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+_EXPR_CHARS = re.compile(r"^[0-9A-Za-z_+\-*/^().\s]+$")
+
+
+def _lhs_expression(step: Step, env: dict[str, Val]) -> Optional[str]:
+    """The left-hand side of a written line, when it is an expression over the
+    givens and not merely a name for the answer.
+
+    A bare symbol ("A = ...") is excluded: that is a restatement, already
+    handled by copy_given, and evaluating it would compare the given to itself.
+    """
+    text = (step.raw_text or "").strip()
+    if "=" not in text:
+        return None
+    lhs = text.split("=", 1)[0].strip()
+    if not lhs or len(lhs) > 60 or not _EXPR_CHARS.match(lhs):
+        return None
+    names = [t for t in re.findall(r"[A-Za-z_][A-Za-z_0-9]*", lhs)]
+    if not names or not all(n in env for n in names):
+        return None
+    if len(names) == 1 and lhs == names[0]:
+        return None                      # "A = [...]", a restatement
+    if not re.search(r"[+\-*/^]|\d", lhs):
+        return None                      # no operation and no weight: nothing to evaluate
+    return lhs
+
+
 def expected_for(step: Step, env: dict[str, Val], topic: str) -> tuple[Optional[Val], str]:
     """Layer 1. -> (expected value, how we got it). (None, reason) means UNKNOWN."""
     # 1. The student restated an expression: evaluate it from the givens.
@@ -875,6 +930,27 @@ def expected_for(step: Step, env: dict[str, Val], topic: str) -> tuple[Optional[
         obj = eval_expr(step.claimed_expression, env)
         if obj is not None:
             return wrap(obj), f"evaluated {step.claimed_expression!r} from the givens"
+
+    # 1b. No claimed_expression, but the LINE shows one. "5b1 + 1b2 = (7,4)"
+    # was being read as claimed_operation "add" over the symbols b1 and b2,
+    # which threw the weights away and expected b1 + b2 -- so a student whose
+    # arithmetic was perfectly right got blamed, while the wrong claim on the
+    # line above sailed through. The parser already handles implicit
+    # multiplication; it just was not being given the text.
+    lhs = _lhs_expression(step, env)
+    if lhs:
+        obj = eval_expr(lhs, env)
+        if obj is not None:
+            return wrap(obj), f"evaluated {lhs!r} from the givens"
+
+    # 1c. A line naming coordinates in a basis is a claim about WEIGHTS, never
+    # a restatement of the vector. The extractor labels "[v]_B = (5,1)" as
+    # copy_given, so it was compared against v itself and passed -- and
+    # [v]_B = v IS the misconception, so the one wrong claim on the page was
+    # certified correct while a later, correct line took the blame.
+    coord = _coordinate_target(step, env)
+    if coord is not None:
+        return coord, "the amounts of each basis vector needed to rebuild it"
 
     op = canonical_op(step.claimed_operation)
     syms = _syms(step, env)
@@ -1605,6 +1681,139 @@ def _perp(u, v) -> Optional[bool]:
         return None
 
 
+_LAMBDA_AT = re.compile(r"(?:lambda|\u03bb)\s*=\s*(-?\d+(?:\.\d+)?(?:\s*/\s*\d+)?)", re.I)
+# "the same vector (1,1) works for both eigenvalues" is an eigenvector claim
+# that never uses the word "eigenvector", so "vector" counts too -- the check
+# only runs with an eigenvalue already in scope and a vector actually parsed.
+_EIGENVECTOR_WORD = re.compile(r"\beigen|\bvector\b", re.I)
+_TUPLE = re.compile(r"\(\s*(-?\d+(?:\.\d+)?(?:\s*,\s*-?\d+(?:\.\d+)?)+)\s*\)")
+_COORD_CLAIM = re.compile(r"\[\s*[a-z]\s*\]\s*_?\s*B\b|\bB\s*-?\s*coordinate", re.I)
+
+
+def _basis_family(env: dict):
+    """b1, b2, ... as columns, plus the vector they are meant to describe."""
+    vecs = {}
+    for name, val in env.items():
+        try:
+            if val is None or not val.is_matrix:
+                continue
+            c = _col(val.obj)
+            if c.shape[1] == 1 and c.shape[0] >= 2:
+                vecs[name] = c
+        except Exception:  # noqa: BLE001
+            continue
+    fam = sorted(n for n in vecs if re.fullmatch(r"b\d+", n, re.I))
+    if len(fam) < 2:
+        return None, None
+    target = next((vecs[n] for n in ("v", "x", "w") if n in vecs), None)
+    if target is None:
+        return None, None
+    return [vecs[n] for n in fam], target
+
+
+def check_concept_claims(ext, env: dict) -> Optional[tuple]:
+    """-> (step_index, step, error_id, said, student Val, correct Val) or None.
+
+    Unlike check_property_claims these carry VALUES, so the scene builders can
+    draw the student's own object beside the one the definition demands.
+    """
+    A = _subject_matrix(env)
+    basis, target = _basis_family(env)
+    steps = sorted(ext.steps, key=lambda st: (st.page, st.reading_order))
+
+    lam_in_scope = None
+    for i, st in enumerate(steps):
+        if st.crossed_out:
+            continue
+        text = " ".join(filter(None, [st.raw_text or "", st.claimed_expression or "",
+                                      getattr(st.value, "text", "") or ""]))
+        if not text.strip():
+            continue
+
+        m = _LAMBDA_AT.search(text)
+        if m:
+            try:
+                lam_in_scope = sp.nsimplify(m.group(1).replace(" ", ""))
+            except Exception:  # noqa: BLE001
+                lam_in_scope = None
+
+        # LA28 -- the vector IS an eigenvector, but not for the eigenvalue the
+        # student paired it with. is_eigvec() alone says yes and the page walks
+        # free, which is exactly what happened on a symmetric 2x2 where one
+        # eigenvector was claimed to serve both eigenvalues.
+        if A is not None and lam_in_scope is not None and _EIGENVECTOR_WORD.search(text):
+            v = _claimed_column(st, text)
+            if v is not None and v.rows == A.rows:
+                try:
+                    if not sp.simplify(A * v - lam_in_scope * v).is_zero_matrix:
+                        want = _eigenvector_for(A, lam_in_scope)
+                        if want is not None:
+                            return (i, st, "LA28",
+                                    "that this vector is an eigenvector for that eigenvalue",
+                                    wrap(v), wrap(want))
+                except Exception:  # noqa: BLE001
+                    pass
+
+        # LA29 -- coordinates in a basis are the WEIGHTS that rebuild the
+        # vector, not the vector's own entries.
+        if basis is not None and _COORD_CLAIM.search(text):
+            c = _claimed_column(st, text)
+            if c is not None and c.rows == len(basis):
+                try:
+                    built = sum((c[k, 0] * basis[k] for k in range(len(basis))),
+                                sp.zeros(target.rows, 1))
+                    if not sp.simplify(built - target).is_zero_matrix:
+                        want = sp.Matrix.hstack(*basis).solve(target)
+                        return (i, st, "LA29",
+                                "that these are the coordinates of the vector in that basis",
+                                wrap(c), wrap(want))
+                except Exception:  # noqa: BLE001
+                    pass
+    return None
+
+
+def _concept_signature(step, env: dict) -> Optional[str]:
+    """A misconception name for a step the numeric check already blamed."""
+    text = " ".join(filter(None, [step.raw_text or "", step.claimed_expression or "",
+                                  getattr(step.value, "text", "") or ""]))
+    if not text.strip():
+        return None
+    basis, target = _basis_family(env)
+    if basis is not None and _COORD_CLAIM.search(text):
+        return "LA29"
+    return None
+
+
+def _claimed_column(step, text: str = "") -> Optional["sp.Matrix"]:
+    """The vector this step claims -- from its value, or failing that from the
+    prose. A sentence like "so an eigenvector is (1,1)" is transcribed as TEXT,
+    with no vector value anywhere on the step, so reading only step.value meant
+    the entire claim was invisible."""
+    v = to_sympy(step.value)
+    if v is not None and v.is_matrix:
+        try:
+            c = _col(v.obj)
+            if c.shape[1] == 1:
+                return c
+        except Exception:  # noqa: BLE001
+            pass
+    m = _TUPLE.search(text or "")
+    if m:
+        try:
+            return sp.Matrix([sp.nsimplify(x.strip()) for x in m.group(1).split(",")])
+        except Exception:  # noqa: BLE001
+            return None
+    return None
+
+
+def _eigenvector_for(A, lam):
+    try:
+        ns = (A - lam * sp.eye(A.rows)).nullspace()
+        return sp.Matrix(ns[0]) if ns else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def check_property_claims(ext, env: dict) -> Optional[tuple]:
     """-> (step_index, step, error_id, what_was_claimed) for the first sentence
     that asserts something demonstrably false about the givens.
@@ -1735,6 +1944,22 @@ def verify(ext: Extraction) -> Verdict:
         # sentence that asserts something false about the givens -- a student
         # can write every number correctly and still conclude the wrong thing,
         # and that conclusion is the whole mistake.
+        concept = check_concept_claims(ext, envs[0])
+        if concept is not None:
+            idx, cstep, eid, said, sval, cval = concept
+            verdict.first_error_index = idx
+            verdict.step_id = cstep.id
+            verdict.student_label = cstep.student_label
+            verdict.error_id = eid
+            verdict.student_value = sval
+            verdict.correct_value = cval
+            verdict.confidence = "high"
+            verdict.flags = ["load_bearing", "concept_claim"]
+            verdict.notes.append(
+                f"step {cstep.id} claims {said}; that does not hold for the givens"
+            )
+            return verdict
+
         claim = check_property_claims(ext, envs[0])
         if claim is not None:
             idx, cstep, eid, said = claim
@@ -1776,6 +2001,11 @@ def verify(ext: Extraction) -> Verdict:
     error_id = first.error_id
     if error_id is None and first.claimed is not None:
         error_id = match_signature(first.claimed, envs[0], first.expected, step, topic)
+    if error_id is None:
+        # The arithmetic check already found the right LINE; this names the
+        # misconception behind it, so the hint can talk about the idea rather
+        # than saying "watch the highlighted part".
+        error_id = _concept_signature(step, envs[0])
     verdict.error_id = error_id
 
     # §4.5 forward propagation: is this the only error, or the first of several?

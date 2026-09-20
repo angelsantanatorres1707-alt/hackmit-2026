@@ -534,6 +534,37 @@ Compares `rank(A)`, `rank([A|b])` and the number of unknowns, then tests whichev
 - **Hint:** "How many solutions there are is settled by how many independent conditions the
   rows really impose, against how many unknowns there are."
 
+### LA28 — the right eigenvector, paired with the wrong eigenvalue
+**Topic:** eigen · **Visual:** medium
+
+`is_eigvec(A, v)` asks only whether `v` stays on its own line. On a symmetric
+`[[3,1],[1,3]]` a student found `(1,1)` for `λ=4`, then reasoned that symmetry means
+`x = y` again for `λ=2` and reused the same vector. `(1,1)` IS an eigenvector, so the
+existing check said yes and the page walked free. The pairing is what is wrong.
+
+- **Check:** an eigenvalue is in scope from an earlier line, and `Av ≠ λv` for it
+- **Note:** the claim is usually prose — "so the same vector (1,1) works for both
+  eigenvalues" — with no vector value on the step at all, so the vector is read out of
+  the sentence
+- **Scene:** `EigenRayTest` refuses this one by design (nothing lifts off the line), so
+  it falls back to `StaticStepHighlight`. The bespoke picture would show the vector
+  travelling the wrong distance ALONG its line.
+- **Hint:** "A vector can sit on an eigen-line and still belong to a different stretch."
+
+### LA29 — coordinates in a basis read off as the vector's own entries
+**Topic:** coordinates · **Visual:** strong
+
+`[v]_B` is the pair of weights that rebuild `v` from `b1, b2`, not `v`'s entries. The
+extractor labels "[v]_B = (5,1)" as `copy_given`, so it was compared against `v` itself
+and PASSED — and `[v]_B = v` is precisely the misconception, so the only wrong claim on
+the page was certified correct while a later, arithmetically perfect line took the blame.
+
+- **Check:** `c₁b₁ + c₂b₂ ≠ v`; the target is `solve([b₁ b₂], v)`
+- **Scene:** `VectorOpCompare` via `_span_rebuild` — the student's weights, applied, against
+  the vector they are supposed to reach
+- **Hint:** "Coordinates in a basis are the amounts of each basis vector you need to
+  rebuild the vector — not the vector's own entries."
+
 ---
 
 ### LA19 — projection with the wrong denominator
