@@ -608,6 +608,40 @@ their place.
 - **Hint:** "A shadow falls onto the line you were asked about, and lands ALONG it. Look
   at which line your own arrow is sitting on."
 
+## The wrong-rule signatures (LA33–LA40)
+
+Added after measuring Noema against expert reviewers who diagnosed the same 32 cases
+blind. Agreement was 32/32 on whether work was wrong at all and 30/32 on which step —
+but on six cases Noema found the right step and had no name for the misconception, so
+the student got "watch the highlighted part". Each of these fires only when the
+student's value is exactly what a specific FALSE IDENTITY produces and is not the right
+answer. That precision is the point: a signature that guesses is worse than none.
+
+| Code | The false rule | Truth |
+|---|---|---|
+| **LA33** | the standard matrix stores each image along a ROW | images are the COLUMNS |
+| **LA34** | independent ⟹ a basis | a basis of Rⁿ needs n of them as well |
+| **LA35** | the eigenvalues are the diagonal entries | true only when nothing sits below it |
+| **LA36** | det(A+B) = det A + det B | det is linear in each ROW, not in the matrix |
+| **LA37** | det(cA) = c·det A | det(cA) = cⁿ·det A — once per row |
+| **LA38** | (AB)⁻¹ = A⁻¹B⁻¹ | (AB)⁻¹ = B⁻¹A⁻¹ — shoes before socks |
+| **LA39** | ‖u‖ = Σuᵢ² | that is ‖u‖², the square of the length |
+| **LA40** | a solution is a set of numbers | it is an ordered assignment; the values were right and the slots were swapped |
+
+LA33 deliberately does nothing when the images are symmetric: rows and columns then give
+the same matrix and there is no mistake to find, which is exactly why the habit survives.
+
+**A false positive these controls caught, unrelated to any of them:** `det(A+B)` and
+`det(2A)` computed CORRECTLY were being marked wrong, because the determinant branch
+read only the first symbol on the line and compared against `det A`. `_det_argument()`
+now evaluates what is actually inside the brackets.
+
+**Where the experts still differ from us (2/32):** on a page whose conclusion follows
+from an earlier false sentence, they blame the sentence and we blame the conclusion —
+`sys-colspace` ("b is in the column space", then "so it has a solution") and
+`trans-rows` ("put them in as rows", then the matrix). Both of ours are defensible, and
+both of theirs point at the idea rather than its consequence. Open.
+
 ---
 
 ### LA19 — projection with the wrong denominator

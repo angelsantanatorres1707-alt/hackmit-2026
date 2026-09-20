@@ -247,6 +247,16 @@ HINTS: dict[str, tuple[str, str]] = {
     "LA32": ("A shadow falls onto the line you were asked about, and lands ALONG it. "
              "Look at which line your own arrow is sitting on in {step}.",
              "watch which line your arrow sits on"),
+    "LA33": ("Where each basis vector lands is a COLUMN of the matrix, not a row. "
+             "Watch where your matrix actually sends the basis in {step}, against "
+             "where the problem says it should go.",
+             "watch where your matrix sends the basis"),
+    "LA34": ("Being independent is not enough on its own -- a basis has to reach every "
+             "point of the space as well. Watch what your set leaves unreachable in "
+             "{step}.", "watch what the set cannot reach"),
+    "LA35": ("Reading the stretch factors off the diagonal works when nothing sits "
+             "below it. Watch whether your vectors actually stay on their own lines "
+             "in {step}.", "watch whether they stay on their lines"),
     "LA28": ("A vector can sit on an eigen-line and still belong to a different "
              "stretch. Watch how far along its own line {step} sends it, against how "
              "far the eigenvalue you paired it with would.",
@@ -530,6 +540,9 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
         "LA22": _angle_property, "LA23": _angle_property,
         "LA24": _grid_order,
         "LA28": _eigen_vector,
+        "LA33": _grid_single, "LA34": _span, "LA35": _eigen_value,
+        "LA36": _determinant, "LA37": _determinant,
+        "LA38": _grid_roundtrip, "LA39": _vector_op, "LA40": _line_system,
         "LA29": _span_rebuild,
         "LA12": _line_system, "LA13": _line_system,
         "LA14": _span, "LA15": _span,

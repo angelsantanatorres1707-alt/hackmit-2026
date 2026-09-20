@@ -613,6 +613,27 @@ def health() -> dict:
 
 
 if FRONTEND_DIR.is_dir():
+    @app.middleware("http")
+    async def _no_stale_frontend(request: Request, call_next):
+        """Never let a browser hold on to an old .js, .css or .html.
+
+        This cost real debugging twice: a page running a cached solve.js while
+        the file on disk had the fix, so the feature looked broken when it was
+        not. Worse on a demo machine, where a stale script survives the reload
+        someone does in front of an audience. The assets are a few KB served
+        from localhost; there is nothing to gain by caching them.
+        """
+        response = await call_next(request)
+        path = request.url.path
+        if path.endswith((".js", ".css", ".html")) or path == "/":
+            response.headers["Cache-Control"] = "no-store, must-revalidate"
+            # MutableHeaders has no pop(); del is the supported way, and the
+            # key may legitimately be absent.
+            for stale in ("etag", "last-modified"):
+                if stale in response.headers:
+                    del response.headers[stale]
+        return response
+
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 else:  # pragma: no cover
     @app.get("/")

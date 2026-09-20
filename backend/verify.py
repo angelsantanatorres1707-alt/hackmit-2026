@@ -858,6 +858,27 @@ def _syms(step: Step, env: dict[str, Val]) -> list[str]:
     return []
 
 
+_DET_ARG = re.compile(r"\bdet\s*\(([^()]+)\)", re.I)
+
+
+def _det_argument(step: Step, env: dict[str, Val]):
+    """The matrix inside det(...), when the line shows an expression there."""
+    for text in (step.claimed_expression or "", step.raw_text or ""):
+        m = _DET_ARG.search(text or "")
+        if not m:
+            continue
+        body = m.group(1).strip()
+        if body in env:
+            continue                  # "det(A)" is the plain single-symbol case
+        try:
+            obj = eval_expr(body, env)
+        except Exception:  # noqa: BLE001
+            obj = None
+        if isinstance(obj, sp.MatrixBase) and obj.rows == obj.cols > 1:
+            return obj
+    return None
+
+
 def _loose(v: Optional[Val]) -> bool:
     """Did the page actually say whether this vector is a row or a column?
 
@@ -1025,8 +1046,16 @@ def expected_for(step: Step, env: dict[str, Val], topic: str) -> tuple[Optional[
             return wrap(env[syms[0]].obj.T), f"the transpose of {syms[0]}"
         if op == "inverse_formula" and syms:
             return wrap(_inv(env[syms[0]].obj)), f"the inverse of {syms[0]}"
-        if op in ("determinant_expand", "cofactor") and syms:
-            return wrap(env[syms[0]].obj.det(), kind="scalar"), f"the determinant of {syms[0]}"
+        if op in ("determinant_expand", "cofactor"):
+            # det OF WHAT? "det(A+B)" and "det(2A)" were being checked against
+            # det A, because only the first symbol in the line was read -- so
+            # a student who computed either of them CORRECTLY was told they
+            # were wrong. Evaluate what is actually inside the brackets.
+            inner = _det_argument(step, env)
+            if inner is not None:
+                return wrap(inner.det(), kind="scalar"), "the determinant of that matrix"
+            if syms:
+                return wrap(env[syms[0]].obj.det(), kind="scalar"), f"the determinant of {syms[0]}"
         if op == "dot" and len(syms) >= 2:
             return wrap(_dot(env[syms[0]].obj, env[syms[1]].obj), kind="scalar"), "the dot product"
         if op == "cross" and len(syms) >= 2:
@@ -1331,7 +1360,26 @@ def match_signature(S: Val, env: dict[str, Val], expected: Optional[Val], step: 
             ("LA02", lambda: A.cols == B.rows and B.cols == A.rows and same(s, B * A) and not same(s, A * B)),
             ("LA01", lambda: A.cols == B.rows and same(s, A * B.T) and not same(s, A * B)),
             ("LA16", lambda: topic == "transpose" and same(s, A.T * B.T) and not same(s, (A * B).T)),
+            # LA38: inversion reverses the order, the way transposition does.
+            # (AB)^-1 = B^-1 A^-1, and the scalar habit (ab)^-1 = a^-1 b^-1
+            # survives because it is right for numbers.
+            ("LA38", lambda: _rule_swap(lambda: _inv(A) * _inv(B),
+                                        lambda: _inv(B) * _inv(A), s, same)),
         ]
+    # A value that is exactly what a WRONG RULE would produce names the rule.
+    # These are signatures, not guesses: each fires only when the student's
+    # number is what that specific false identity gives and is not the right
+    # answer.
+    if A is not None and B is not None and not S.is_matrix:
+        checks.append(("LA36", lambda: _rule_swap(
+            lambda: A.det() + B.det(), lambda: (A + B).det(), s, same)))
+    if M is not None and M.rows == M.cols and not S.is_matrix:
+        checks.append(("LA37", lambda: _scaled_det(M, s, step, same)))
+    if u is not None and not S.is_matrix:
+        checks.append(("LA39", lambda: _rule_swap(
+            lambda: u.dot(u), lambda: sp.sqrt(u.dot(u)), s, same)))
+    if expected is not None and expected.is_matrix and S.is_matrix:
+        checks.append(("LA40", lambda: _permuted(s, expected.obj, same)))
     if M is not None and M.rows == M.cols:
         # LA06 only when the page shows a row swap. Without that evidence a claim of
         # +6 where the determinant is -6 is indistinguishable from LA04 on many
@@ -1489,6 +1537,53 @@ def _projection_subject(env: dict[str, Val]):
         except Exception:  # noqa: BLE001
             continue
     return None
+
+
+def _rule_swap(wrong_rule, right_rule, claimed, same) -> bool:
+    """Did the student's value come from the WRONG identity rather than the right one?"""
+    try:
+        w, r = wrong_rule(), right_rule()
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        return bool(same(claimed, w) and not same(claimed, r))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+_SCALE_RE = re.compile(r"det\s*\(\s*(-?\d+(?:\.\d+)?)\s*[A-Za-z]", re.I)
+
+
+def _scaled_det(M, claimed, step, same) -> bool:
+    """det(cA) taken as c*det A instead of c^n det A.
+
+    The exponent is the SIZE of the matrix: scaling every row scales the
+    determinant once per row. Needs the c the student wrote, so it only fires
+    on a line that actually shows det(cA).
+    """
+    text = " ".join(filter(None, [step.raw_text or "", step.claimed_expression or ""]))
+    m = _SCALE_RE.search(text)
+    if not m:
+        return False
+    try:
+        c = sp.nsimplify(m.group(1))
+        if c in (0, 1, -1):
+            return False          # c^n == c, so there is nothing to distinguish
+        d = M.det()
+        return bool(same(claimed, c * d) and not same(claimed, c ** M.rows * d))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _permuted(claimed, correct, same) -> bool:
+    """The right numbers in the wrong slots -- a solution read back unordered."""
+    try:
+        a, b = _col(claimed), _col(correct)
+        if a.shape != b.shape or a.rows < 2 or same(a, b):
+            return False
+        return sorted(sp.nsimplify(x) for x in a) == sorted(sp.nsimplify(x) for x in b)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _swap_evidence(step: Step) -> bool:
@@ -1864,6 +1959,46 @@ def _solution_counts(env: dict):
     return (ra > r, ra == r and r < n, ra == r and r == n)
 
 
+_BASIS_RN = re.compile(r"\bbasis\b[^.]{0,30}?\bR\s*\^?\s*\{?\s*(\d)\b", re.I)
+
+
+def _basis_for_rn(ext) -> Optional[int]:
+    """The n in "a basis for R^n", from anywhere on the page."""
+    parts = [getattr(ext.problem, "statement", "") or "",
+             getattr(ext.problem, "asks_for", "") or ""]
+    for st in ext.steps:
+        parts += [st.raw_text or "", getattr(st.value, "text", "") or ""]
+    m = _BASIS_RN.search(" ".join(parts))
+    if not m:
+        return None
+    n = int(m.group(1))
+    return n if 1 <= n <= 4 else None
+
+
+def _is_basis_of(vectors: list, n: int) -> Optional[bool]:
+    try:
+        if not vectors:
+            return None
+        if any(v.rows != n for v in vectors):
+            return False          # not even living in R^n
+        M = sp.Matrix.hstack(*vectors)
+        return bool(len(vectors) == n and M.rank() == n)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _diagonal_is_spectrum(A) -> Optional[bool]:
+    """Is the diagonal actually the eigenvalue multiset? (True iff triangular-ish.)"""
+    try:
+        diag = _sorted_multiset([A[i, i] for i in range(A.rows)])
+        eigs = _eigenvalues(A)
+        if len(diag) != len(eigs):
+            return None
+        return all(sp.simplify(a - b) == 0 for a, b in zip(diag, eigs))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _nonzero_det(A) -> Optional[bool]:
     try:
         return bool(sp.simplify(A.det()) != 0)
@@ -1932,6 +2067,7 @@ def check_concept_claims(ext, env: dict) -> Optional[tuple]:
     draw the student's own object beside the one the definition demands.
     """
     A = _subject_matrix(env)
+    A_images = _images_matrix(env)
     basis, target = _basis_family(env)
     steps = sorted(ext.steps, key=lambda st: (st.page, st.reading_order))
 
@@ -1967,6 +2103,20 @@ def check_concept_claims(ext, env: dict) -> Optional[tuple]:
                                     wrap(v), wrap(want))
                 except Exception:  # noqa: BLE001
                     pass
+
+        # LA33 -- the images of the basis vectors written in as ROWS. The
+        # standard matrix has them as COLUMNS. Only fires when the claim is
+        # exactly the transpose of the right matrix: a symmetric example makes
+        # rows and columns the same matrix, and then there is no mistake to
+        # find, which is precisely why students get away with it for so long.
+        if A_images is not None:
+            M = _claimed_square(st)
+            if (M is not None and M.shape == A_images.shape
+                    and sp.simplify(M - A_images.T).is_zero_matrix
+                    and not sp.simplify(M - A_images).is_zero_matrix):
+                return (i, st, "LA33",
+                        "that the standard matrix has the images as its rows",
+                        wrap(M), wrap(A_images))
 
         # LA29 -- coordinates in a basis are the WEIGHTS that rebuild the
         # vector, not the vector's own entries.
@@ -2036,6 +2186,14 @@ def _swapped_order_value(step, env: dict) -> Optional[Val]:
         except Exception:  # noqa: BLE001
             continue
     return None
+
+
+def _claimed_square(step) -> Optional["sp.Matrix"]:
+    v = to_sympy(step.value)
+    if v is None or not v.is_matrix:
+        return None
+    M = v.obj
+    return M if M.rows > 1 and M.rows == M.cols else None
 
 
 def _claimed_column(step, text: str = "") -> Optional["sp.Matrix"]:
@@ -2142,6 +2300,26 @@ def check_property_claims(ext, env: dict) -> Optional[tuple]:
             (re.compile(r"\b(?:are|is)\s+(?:mutually\s+)?(?:orthogonal|perpendicular)\b",
                         re.I), "LA26",
              "that the two vectors are perpendicular", lambda: _perp(V[0], V[1]), True))
+    # LA34 -- "a basis for R^n" with the wrong NUMBER of vectors. Independence
+    # is necessary and not sufficient: a basis of R^n needs n of them, and
+    # checking only independence marked this work correct.
+    dim_claim = _basis_for_rn(ext)
+    if dim_claim is not None and V:
+        n = dim_claim
+        tests.append(
+            (re.compile(r"\bbasis\b", re.I), "LA34",
+             f"that these vectors are a basis for R^{n}",
+             lambda: _is_basis_of(V, n), True))
+
+    # LA35 -- eigenvalues read straight off the diagonal. True for a triangular
+    # matrix, which is where the habit comes from, and false in general.
+    if A is not None and A.rows == A.cols:
+        tests.append(
+            (re.compile(r"eigenvalues?[^.]{0,40}\bdiagonal\b"
+                        r"|\bdiagonal\b[^.]{0,40}eigenvalues?", re.I), "LA35",
+             "that the eigenvalues are the diagonal entries",
+             lambda: _diagonal_is_spectrum(A), True))
+
     if counts is not None:
         none_, many, one = counts
         tests += [
