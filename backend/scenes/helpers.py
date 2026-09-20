@@ -636,18 +636,24 @@ def grid_step(box: float, unit: float, target: int = GRID_TARGET_CELLS) -> int:
     return max(1, int(math.ceil(cells / float(target))))
 
 
-def min_stretch(*mats, floor: float = 0.1) -> float:
+def min_stretch(*mats, floor: float = 0.1, ceiling: float = 12.0) -> float:
     """Smallest singular value over the given matrices.
 
-    That is exactly the worst-case factor by which a transform SQUEEZES the
-    spacing between parallel grid lines. A matrix like [[3,4],[1,2]] has
-    sigma_min = 0.37, so its image of a unit lattice is 2.7x tighter in one
-    direction than the lattice we drew -- which at 720p is the hairball of
-    near-parallel lines that made the determinant panel unreadable. Feed this
-    to ``grid_shrink`` and the step is chosen for the state the scene ENDS
-    in, not the one it starts in.
+    That is exactly the factor by which a transform rescales the spacing of
+    the TIGHTEST family of grid lines, and it cuts both ways:
+
+      * [[3,4],[1,2]] has sigma_min = 0.37, so its image of a unit lattice is
+        2.7x tighter than what we drew -- at 720p that is the hairball of
+        near-parallel lines that made the determinant panel unreadable;
+      * [[6,-5],[2,5]] has sigma_min = 5.3, so a lattice chosen to look right
+        at the start ends the scene with one line in the panel.
+
+    Feeding it to ``grid_shrink`` picks the step for the state the scene ENDS
+    in -- the held frame, the one with the hint on it -- and ``panel`` then
+    refuses any step that would leave the opening frame with fewer than
+    about three cells.
     """
-    m = 1.0
+    m: float | None = None
     for M in mats:
         if M is None:
             continue
@@ -659,8 +665,25 @@ def min_stretch(*mats, floor: float = 0.1) -> float:
         except Exception:  # noqa: BLE001
             continue
         if sv.size:
-            m = min(m, float(sv[-1]))
-    return float(max(floor, min(1.0, m)))
+            v = float(sv[-1])
+            m = v if m is None else min(m, v)
+    if m is None:
+        return 1.0
+    return float(max(floor, min(ceiling, m)))
+
+
+def lattice_weight(cells: float) -> tuple[float, float]:
+    """(stroke_width, stroke_opacity) for a panel showing ``cells`` cells.
+
+    Ink per unit area is what decides whether a lattice reads or turns into
+    grey fog, so the line weight tracks the density instead of being a
+    constant: 4 big cells get a fat bright line, 20 small ones get a thin
+    dim one. Both still read as a grid; neither reads as a wash.
+    """
+    c = max(float(cells), 1.0)
+    width = float(np.clip(2.7 - 0.085 * c, 1.15, 2.7))
+    opacity = float(np.clip(1.02 - 0.030 * c, 0.42, 0.95))
+    return width, opacity
 
 
 def make_plane(center: np.ndarray, *, radius: float = PLANE_RADIUS,
@@ -742,13 +765,22 @@ def panel(dx: float, *, radius: float | None = None, unit: float = UNIT,
         # shear pulls the grid lines apart and leaves the box with four
         # lonely lines in it. Vertically there is no neighbour to bleed into,
         # so y gets the generous radius; x is capped by ``max_reach``.
+        # (rx/ry below.)
         ry = _snap(bh / 2 + 3.4)
         rx = _snap(bw / 2 + 3.4)
         if max_reach is not None:
             rx = min(rx, _snap(max_reach))
         # ...but never so small that the panel starts out half empty.
         rx = max(rx, int(step * math.ceil(((bw / 2 + 0.15) / unit) / float(step))))
-    plane = make_plane(center, radius=rx, radius_y=ry, unit=unit, step=step)
+    # Line weight follows the density the panel will actually show. The
+    # scene spends time in BOTH states, so split the difference between the
+    # opening lattice and the transformed one.
+    span2 = max(bw, bh)
+    cells_open = span2 / max(unit * step, 1e-6)
+    cells_end = cells_open / max(float(grid_shrink), 1e-3)
+    gw, go = lattice_weight(math.sqrt(max(cells_open, 1.0) * max(cells_end, 1.0)))
+    plane = make_plane(center, radius=rx, radius_y=ry, unit=unit, step=step,
+                       stroke_width=gw, stroke_opacity=go)
     plane.set_z_index(Z_PLANE)
     rect = Rectangle(width=bw, height=bh).move_to(center)
     return Panel(plane=plane, origin=plane.get_origin(), center=center, box=rect,

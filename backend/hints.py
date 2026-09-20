@@ -46,22 +46,73 @@ def fmt_num(x: Any, max_den: int = 20) -> str:
     return f"{val:.2f}".rstrip("0").rstrip(".")
 
 
+def real(e: Any) -> Optional[float]:
+    """A sympy entry -> a finite real float, or None. Never raises.
+
+    ``float(sp.N(e))`` raises TypeError on a free symbol ("lambda" written in a
+    matrix), on anything complex, and on ``zoo`` (which an exact entry of "1/0"
+    produces) -- and it silently returns inf/nan for ``oo`` and ``nan``. Every
+    one of those reaches this module from a real extraction, and every one of
+    them used to escape ``_rows`` as an uncaught TypeError, which turned "is
+    this drawable?" into a 500 for the whole request. A value we cannot place on
+    a plane is not an error, it is just not drawable, so it comes back as None
+    and the caller steps down the fallback ladder.
+    """
+    try:
+        val = complex(sp.N(e))
+    except (TypeError, ValueError, AttributeError, OverflowError):
+        return None
+    # nan compares False against everything, so zoo (nan+nanj) falls through the
+    # imaginary test and is caught by the `r != r` line below.
+    if abs(val.imag) > 1e-9:
+        return None
+    r = val.real
+    if r != r or r in (float("inf"), float("-inf")):
+        return None
+    return r
+
+
 def _rows(v: Optional[Val]) -> Optional[list[list[float]]]:
+    """All-or-nothing: one undrawable entry makes the whole matrix undrawable."""
     if v is None or not v.is_matrix:
         return None
-    return [[float(sp.N(e)) for e in v.obj.row(i)] for i in range(v.obj.rows)]
+    out: list[list[float]] = []
+    try:
+        for i in range(v.obj.rows):
+            row: list[float] = []
+            for e in v.obj.row(i):
+                f = real(e)
+                if f is None:
+                    return None
+                row.append(f)
+            out.append(row)
+    except Exception:
+        return None
+    return out
 
 
 def _display(v: Optional[Val]) -> Optional[list[list[str]]]:
     if v is None or not v.is_matrix:
         return None
-    return [[fmt_num(e) for e in v.obj.row(i)] for i in range(v.obj.rows)]
+    try:
+        return [[fmt_num(e) for e in v.obj.row(i)] for i in range(v.obj.rows)]
+    except Exception:
+        return None
 
 
 def _flat(v: Optional[Val]) -> Optional[list[float]]:
     if v is None or not v.is_matrix:
         return None
-    return [float(sp.N(e)) for e in _col(v.obj)]
+    out: list[float] = []
+    try:
+        for e in _col(v.obj):
+            f = real(e)
+            if f is None:
+                return None
+            out.append(f)
+    except Exception:
+        return None
+    return out
 
 
 def _is_2x2(v: Optional[Val]) -> bool:
