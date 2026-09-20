@@ -91,14 +91,17 @@
       h.className = 'prob-title';
       h.textContent = 'Problem ' + (i + 1);
 
-      var sub = document.createElement('p');
-      sub.className = 'prob-sub';
-      sub.textContent = p.kind === 'text'
-        ? p.text.slice(0, 120) + (p.text.length > 120 ? '…' : '')
-        : (p.file.name || 'photo');
-
       body.appendChild(h);
-      body.appendChild(sub);
+
+      // A photo is identified by its thumbnail, not by whatever the camera
+      // roll happened to call the file. Only a typed problem gets a second
+      // line, and there the line is the problem itself.
+      if (p.kind === 'text') {
+        var sub = document.createElement('p');
+        sub.className = 'prob-sub';
+        sub.textContent = p.text.slice(0, 120) + (p.text.length > 120 ? '\u2026' : '');
+        body.appendChild(sub);
+      }
 
       var x = document.createElement('button');
       x.type = 'button';
