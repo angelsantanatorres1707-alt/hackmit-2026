@@ -1814,6 +1814,40 @@ def _eigenvector_for(A, lam):
         return None
 
 
+def property_holds(error_id: str, env: dict) -> Optional[bool]:
+    """Does the property the student asserted actually HOLD for these givens?
+
+    True  -- the student was right; whoever blamed them is wrong.
+    False -- the claim is genuinely false.
+    None  -- not decidable here, so no opinion.
+
+    This exists so a proposed diagnosis can be confirmed against the mathematics
+    rather than trusted. A language model asked "is this conclusion wrong?" will
+    pattern-match the SHAPE of a problem -- it called a genuine rotation a
+    failure to preserve angles, reciting the misconception it had just been
+    shown. The arithmetic cannot be talked into that.
+    """
+    A = _images_matrix(env) or _square_from_env(env)
+    try:
+        if error_id == "LA22" and A is not None and A.rows == A.cols:
+            return _conformal(A)
+        if error_id == "LA23" and A is not None and A.rows == A.cols:
+            return _isometry(A)
+        if error_id == "LA24":
+            P, Q = env.get("A"), env.get("B")
+            if P is not None and Q is not None and P.is_matrix and Q.is_matrix:
+                return _commute(P.obj, Q.obj)
+        if error_id == "LA25" and A is not None and A.rows == A.cols:
+            return _nonzero_det(A)
+        if error_id == "LA26":
+            V = _vector_set(env)
+            if len(V) == 2:
+                return _perp(V[0], V[1])
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
 def check_property_claims(ext, env: dict) -> Optional[tuple]:
     """-> (step_index, step, error_id, what_was_claimed) for the first sentence
     that asserts something demonstrably false about the givens.

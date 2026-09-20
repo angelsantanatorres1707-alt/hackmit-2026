@@ -179,6 +179,27 @@ def analyze_extraction(ext: Extraction, meta: dict, *, wait: bool, quality: Opti
         crashes.append(f"could not check this work ({type(exc).__name__}: {exc})")
         verdict = _empty_verdict()
 
+    # The deterministic pass found nothing. That is the case where a false
+    # conclusion drawn from correct numbers hides, and where a regex over the
+    # student's phrasing runs out -- so ask the model, and let sympy veto it.
+    # See backend/judge.py for the box this runs in.
+    if verdict.first_error_index is None and not extract_mod.use_fixture_mode():
+        try:
+            from . import judge as judge_mod
+
+            j = judge_mod.judge(ext, verdict)
+            if j is not None:
+                step = sorted(ext.steps, key=lambda s: (s.page, s.reading_order))[j.step_index]
+                verdict.first_error_index = j.step_index
+                verdict.step_id = j.step_id
+                verdict.student_label = step.student_label
+                verdict.error_id = j.error_id
+                verdict.confidence = j.confidence
+                verdict.flags = ["load_bearing", "judged"]
+                verdict.notes.append(f"judged: {j.misconception}")
+        except Exception as exc:  # noqa: BLE001
+            crashes.append(f"could not ask for a second opinion ({type(exc).__name__}: {exc})")
+
     try:
         plan = hints_mod.plan(verdict, ext)
     except Exception as exc:
