@@ -179,7 +179,7 @@
 /* ── visualisation ───────────────────────────────────────────────────── */
 .viz-body { gap: 16px; }
 .viz-frame {
-  position: relative; aspect-ratio: 16 / 9; width: 100%;
+  position: relative; aspect-ratio: 16 / 10; width: 100%;
   border-radius: var(--radius); overflow: hidden;
   background: #05080A; border: 1px solid var(--line);
   display: grid; place-items: center;
@@ -284,7 +284,7 @@
 
 /* ── warnings ────────────────────────────────────────────────────────── */
 .ws-warnings { display: flex; flex-direction: column; gap: 9px; }
-.ws-warnings[hidden] { display: none; }
+.ws-warnings[hidden], .ws-warnings:empty { display: none; }
 .ws-warn {
   padding: 13px 16px; border-radius: 11px; font-size: 1rem; line-height: 1.5;
   background: rgba(224, 161, 6, 0.10);
