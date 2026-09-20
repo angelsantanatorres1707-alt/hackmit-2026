@@ -526,3 +526,17 @@
 }
 .pick-empty { color: var(--muted); font-size: 1rem; margin: 0; }
 .pick-empty a { color: var(--teal-ink); }
+
+/* ── the two slides ──────────────────────────────────────────────────── */
+/* This page now wears workspace.html's chrome -- the same progress rail and
+   the same centred .stepbox -- so steps 2 and 3 read as one flow with step 1
+   rather than as a separate dashboard. Both slides live in ONE document: a
+   render takes tens of seconds, and a real navigation between them would drop
+   the poll timer and the job with it.
+
+   .stepbox centres its text for the headline and the lede; .slide-body puts
+   the working surfaces back to the left, and reproduces the flex column the
+   old .pane gave them (plus .viz-body's gap on the animation slide). */
+.slide[hidden] { display: none; }
+.slide-body { text-align: left; display: flex; flex-direction: column; min-width: 0; }
+#slide-animation .slide-body { gap: 16px; }

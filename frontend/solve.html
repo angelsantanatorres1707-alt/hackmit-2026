@@ -7,84 +7,117 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="workspace.css">
 <link rel="stylesheet" href="solve.css">
 </head>
-<body class="ws-body">
+<body class="step-page">
 
-<header class="ws-top">
-  <a class="ws-brand" href="index.html" title="Back to the landing page">
-    <img src="logo.png" alt="Noema" width="545" height="200">
-  </a>
-  <nav class="navbar" aria-label="Main">
-    <a href="workspace.html">Workspace</a>
-    <a href="about.html">What is Noema?</a>
-    <a href="faq.html">FAQ</a>
-  </nav>
+<header class="topbar">
+  <div class="brand">
+    <a href="index.html"><img class="brand-logo" src="logo.png" alt="Noema" width="545" height="200"></a>
+  </div>
+  <div class="topbar-right">
+    <nav class="navbar" aria-label="Main">
+      <a href="workspace.html">Workspace</a>
+      <a href="about.html">What is Noema?</a>
+      <a href="faq.html">FAQ</a>
+    </nav>
+  </div>
 </header>
 
-<main class="ws">
+<main>
+  <div class="step-bloom" aria-hidden="true"></div>
 
-  <!-- ─────────────────────────── WORKSPACE ─────────────────────────── -->
-  <section class="pane">
+  <ol class="progress" aria-label="Progress">
+    <li data-step="1"><span>1</span>Your problems</li>
+    <li data-step="2" class="is-here" aria-current="step"><span>2</span>Your work</li>
+    <li data-step="3"><span>3</span>The animation</li>
+  </ol>
 
-    <!-- the problem, kept on screen once sent -->
-    <div class="prob-shown" id="prob-shown" hidden>
-      <div class="prob-shown-head">
-        <button class="zone-change" type="button" id="prob-change">Change</button>
+  <!-- ─────────────────────── SLIDE 2: YOUR WORK ────────────────────── -->
+  <section class="stepbox slide" id="slide-work">
+    <h1>Show me your work</h1>
+    <p class="step-lede">
+      Every line you wrote, exactly as you wrote it &mdash; mistakes included.
+      Noema follows your logic; it never hands you the answer.
+    </p>
+
+    <div class="slide-body">
+
+      <!-- the problem, kept on screen once sent -->
+      <div class="prob-shown" id="prob-shown" hidden>
+        <div class="prob-shown-head">
+          <button class="zone-change" type="button" id="prob-change">Change</button>
+        </div>
+        <div class="prob-imgs" id="prob-imgs"></div>
+        <p class="prob-statement" id="prob-statement" hidden></p>
       </div>
-      <div class="prob-imgs" id="prob-imgs"></div>
-      <p class="prob-statement" id="prob-statement" hidden></p>
+
+      <div class="pick" id="pick">
+        <div class="pick-head">
+          <h2 class="pick-title" id="pick-title">Which one are you stuck on?</h2>
+          <a class="pick-back" href="workspace.html">Change problems</a>
+        </div>
+        <ul class="pick-list" id="pick-list"></ul>
+        <p class="pick-empty" id="pick-empty" hidden>
+          No problem carried over. <a href="workspace.html">Add one first</a>.
+        </p>
+      </div>
+
+      <!-- chat 2: your work -->
+      <div class="chat" id="chat-work" data-dest="work">
+        <input type="file" class="chat-file" accept="image/*,.heic,.heif,application/pdf,.pdf" multiple hidden>
+        <ol class="ws-log" id="ws-log"></ol>
+        <ul class="chat-atts"></ul>
+        <p class="chat-label">Upload your work</p>
+
+        <div class="chat-pill">
+          <button class="pill-act" type="button" data-act="attach" title="Attach" aria-label="Attach an image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7.5-7.5"/></svg></button>
+          <button class="pill-act" type="button" data-act="voice" title="Dictate" aria-label="Dictate"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+          <button class="pill-act" type="button" data-act="camera" title="Camera" aria-label="Camera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
+          <textarea class="chat-text" rows="1" placeholder="Type, or ask a question"></textarea>
+        </div>
+        <div class="chat-drop-hint">Drop to attach</div>
+      </div>
+
+      <div class="ws-notice" id="ws-notice" hidden></div>
+
+      <div class="composer-foot">
+        <span class="composer-note" id="composer-note">Analysed step by step &mdash; never auto-graded</span>
+        <button class="ws-run" id="ws-run" type="button" disabled>
+          Run analysis <kbd>&#8984;</kbd><kbd>&#9166;</kbd>
+        </button>
+      </div>
+
+      <div class="cam" id="cam" hidden>
+        <video id="cam-video" playsinline muted></video>
+        <div class="cam-bar">
+          <button class="ws-btn" type="button" id="cam-shot">Take photo</button>
+          <button class="ws-btn" type="button" id="cam-stop">Close camera</button>
+        </div>
+      </div>
+
     </div>
 
-    <div class="pick" id="pick">
-      <div class="pick-head">
-        <h2 class="pick-title" id="pick-title">Which one are you stuck on?</h2>
-        <a class="pick-back" href="workspace.html">Change problems</a>
-      </div>
-      <ul class="pick-list" id="pick-list"></ul>
-      <p class="pick-empty" id="pick-empty" hidden>
-        No problem carried over. <a href="workspace.html">Add one first</a>.
-      </p>
-    </div>
-
-    <!-- chat 2: your work -->
-    <div class="chat" id="chat-work" data-dest="work">
-      <input type="file" class="chat-file" accept="image/*,.heic,.heif,application/pdf,.pdf" multiple hidden>
-      <ol class="ws-log" id="ws-log"></ol>
-      <ul class="chat-atts"></ul>
-      <p class="chat-label">Upload your work</p>
-
-      <div class="chat-pill">
-        <button class="pill-act" type="button" data-act="attach" title="Attach" aria-label="Attach an image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7.5-7.5"/></svg></button>
-        <button class="pill-act" type="button" data-act="voice" title="Dictate" aria-label="Dictate"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
-        <button class="pill-act" type="button" data-act="camera" title="Camera" aria-label="Camera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
-        <textarea class="chat-text" rows="1" placeholder="Type, or ask a question"></textarea>
-      </div>
-      <div class="chat-drop-hint">Drop to attach</div>
-    </div>
-
-    <div class="ws-notice" id="ws-notice" hidden></div>
-
-    <div class="composer-foot">
-      <span class="composer-note" id="composer-note">Analysed step by step &mdash; never auto-graded</span>
-      <button class="ws-run" id="ws-run" type="button" disabled>
-        Run analysis <kbd>&#8984;</kbd><kbd>&#9166;</kbd>
+    <div class="step-foot">
+      <button class="cta" type="button" id="go-animation">
+        Next
+        <span class="cta-dot" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M5 12h13M12 5l7 7-7 7"/></svg>
+        </span>
       </button>
     </div>
-
-    <div class="cam" id="cam" hidden>
-      <video id="cam-video" playsinline muted></video>
-      <div class="cam-bar">
-        <button class="ws-btn" type="button" id="cam-shot">Take photo</button>
-        <button class="ws-btn" type="button" id="cam-stop">Close camera</button>
-      </div>
-    </div>
-
   </section>
 
-  <!-- ────────────────────── VISUALIZATION ENGINE ───────────────────── -->
-  <section class="pane">
-    <div class="pane-body viz-body">
+  <!-- ────────────────────── SLIDE 3: THE ANIMATION ─────────────────── -->
+  <section class="stepbox slide" id="slide-animation" hidden>
+    <h1>Watch it <em>click</em></h1>
+    <p class="step-lede">
+      Your reasoning, played back against what the problem actually asked.
+      Where the two come apart is the fix.
+    </p>
+
+    <div class="slide-body">
       <div class="ws-warnings" id="ws-warnings"></div>
 
       <div class="viz-frame" id="viz-frame">
@@ -93,7 +126,7 @@
         <div class="viz-empty" id="viz-empty">
           <span class="viz-empty-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16M3 12h18"/></svg></span>
           <p class="viz-empty-title">No visualization yet</p>
-          <p class="viz-empty-sub">Run an analysis &mdash; a tailored animation renders here.</p>
+          <p class="viz-empty-sub">Run an analysis on the previous step &mdash; a tailored animation renders here.</p>
         </div>
 
         <div class="viz-busy" id="viz-busy" hidden>
@@ -127,6 +160,10 @@
       </div>
 
       <ol class="viz-steps" id="viz-steps"></ol>
+    </div>
+
+    <div class="step-foot">
+      <button class="ws-btn" type="button" id="back-to-work">Back to your work</button>
     </div>
   </section>
 

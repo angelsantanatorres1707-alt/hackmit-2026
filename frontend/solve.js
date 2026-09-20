@@ -487,6 +487,7 @@
   function start(promise) {
     S.busy = true;
     syncRun();
+    showSlide(3);           // every scrap of feedback below paints on slide 3
     showViz('busy');
     $('#viz-busy-title').textContent = 'Reading your work';
     $('#viz-busy-sub').textContent = 'Transcribing every line exactly as written — mistakes included.';
@@ -644,6 +645,31 @@
     });
   }
 
+  /* ── the two slides ────────────────────────────────────────────────── */
+
+  /* Steps 2 and 3 are two sections of one document, not two pages. A render
+     runs for tens of seconds behind a poll timer, and navigating to a third
+     HTML file would throw both away mid-flight. Hiding a section leaves every
+     #viz-* node queryable, so nothing below ever learns which slide is up. */
+  function showSlide(n) {
+    $('#slide-work').hidden = n !== 2;
+    $('#slide-animation').hidden = n !== 3;
+
+    [].forEach.call(document.querySelectorAll('.progress li'), function (li) {
+      var here = li.getAttribute('data-step') === String(n);
+      li.classList.toggle('is-here', here);
+      if (here) li.setAttribute('aria-current', 'step');
+      else li.removeAttribute('aria-current');
+    });
+
+    global.scrollTo(0, 0);
+  }
+
+  function wireSlides() {
+    $('#go-animation').addEventListener('click', function () { showSlide(3); });
+    $('#back-to-work').addEventListener('click', function () { showSlide(2); });
+  }
+
   /* ── transport ─────────────────────────────────────────────────────── */
 
   function wireTransport() {
@@ -745,6 +771,7 @@
 
   /* ── go ────────────────────────────────────────────────────────────── */
 
+  wireSlides();
   wireTransport();
   wireCamera();
   wireChats();
