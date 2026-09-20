@@ -89,7 +89,7 @@
       var cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = !!p.multi;
-      cb.addEventListener('change', function () { p.multi = cb.checked; persist(); note(); });
+      cb.addEventListener('change', function () { p.multi = cb.checked; persist(); });
       lab.appendChild(cb);
       lab.appendChild(document.createTextNode(' This holds more than one problem'));
 
@@ -115,27 +115,7 @@
   }
 
   function note() {
-    var n = items.length;
-    var multi = items.filter(function (p) { return p.multi; }).length;
-    var el = $('#step-note');
-    var next = $('#go-next');
-
-    if (!n) {
-      el.textContent = 'Nothing added yet.';
-      next.classList.add('is-off');
-      return;
-    }
-    next.classList.remove('is-off');
-
-    if (n === 1 && !multi) {
-      el.textContent = 'One problem ready. Next you’ll add the work you have so far.';
-    } else if (n === 1 && multi) {
-      el.textContent = 'One page holding several problems — you’ll pick which one next.';
-    } else {
-      el.textContent = n + ' problems ready' +
-        (multi ? ' (' + multi + ' holding more than one)' : '') +
-        ' — you’ll pick which one next.';
-    }
+    $('#go-next').classList.toggle('is-off', items.length === 0);
   }
 
   /* ── adding ────────────────────────────────────────────────────────── */
@@ -285,6 +265,7 @@
 
   function wireNext() {
     $('#go-next').addEventListener('click', function (e) {
+      e.stopPropagation();          // it lives inside the dropzone
       if (!items.length) {
         e.preventDefault();
         toast('Add the problem you are stuck on first.');

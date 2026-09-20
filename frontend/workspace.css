@@ -154,7 +154,6 @@
 .prob-x:hover { color: var(--violet); }
 
 /* ── foot ────────────────────────────────────────────────────────────── */
-.step-note { margin: 20px 0 0; color: var(--muted); font-size: 0.98rem; }
 .step-foot { margin-top: 26px; display: flex; align-items: center; justify-content: center; gap: 14px; }
 .step-foot .cta { margin-top: 0; }
 .cta.is-off { opacity: 0.4; pointer-events: none; }
@@ -173,3 +172,18 @@
   .progress li + li::before { width: 14px; margin-right: 6px; }
   .progress { gap: 6px; }
 }
+
+/* ── continue: an arrow in the corner of the add box ─────────────────── */
+.go {
+  position: absolute; right: 16px; bottom: 16px; z-index: 2;
+  width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; text-decoration: none;
+  background: var(--ink); color: #fff;
+  transition: background 0.15s ease, transform 0.14s ease, opacity 0.15s ease;
+}
+.go svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.go:hover { background: #000; transform: translateX(2px); }
+.go:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+.go.is-off { background: var(--panel-2); color: #A9B4BA; pointer-events: none; }
+
+.step-foot:empty, .step-foot:has(> [hidden]:only-child) { display: none; }
