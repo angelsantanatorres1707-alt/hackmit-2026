@@ -174,20 +174,9 @@
       notice.hidden = true;
     }
 
-    $('#stat-input').textContent = S.files.length
-      ? 'input :: ' + S.files.length + ' file' + (S.files.length > 1 ? 's' : '')
-      : 'input :: awaiting';
-    $('#ws-path').innerHTML = S.files.length
-      ? '~/workspace/<b>' + escapeHtml(S.files[0].name || 'upload') + '</b>'
-      : '~/workspace/<b>untitled</b>';
     syncRun();
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
 
   function syncRun() {
     $('#ws-run').disabled = S.busy || !S.files.length;
@@ -448,10 +437,133 @@
     });
   }
 
+
+  /* ── voice: Web Speech API, the same one the classic flow dictates with ─ */
+
+  function wireVoice() {
+    var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var btn = $('#mode-voice');
+
+    if (!Rec) {
+      btn.disabled = true;
+      btn.title = 'Dictation uses the Web Speech API — Chrome or Edge. Typing works everywhere.';
+      return;
+    }
+
+    var rec = new Rec();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = 'en-US';
+
+    var base = '';
+    var on = false;
+
+    rec.addEventListener('result', function (e) {
+      var fin = '', interim = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) fin += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      if (fin) base = (base ? base.replace(/\s*$/, ' ') : '') + fin.trim();
+      $('#ws-prompt').value = base + (interim ? (base ? ' ' : '') + interim : '');
+    });
+    rec.addEventListener('error', function (e) {
+      stop();
+      toast(e.error === 'not-allowed'
+        ? 'Microphone access was refused.'
+        : 'Dictation stopped: ' + e.error);
+    });
+    rec.addEventListener('end', function () { if (on) { try { rec.start(); } catch (_) { stop(); } } });
+
+    function start() {
+      base = $('#ws-prompt').value.trim();
+      on = true;
+      try { rec.start(); } catch (_) { /* already running */ }
+      btn.classList.add('listening');
+      setMode('voice');
+    }
+    function stop() {
+      on = false;
+      try { rec.stop(); } catch (_) {}
+      btn.classList.remove('listening');
+      setMode('text');
+    }
+
+    btn.addEventListener('click', function () { if (on) stop(); else start(); });
+  }
+
+  /* ── camera: getUserMedia -> canvas -> a File in the same queue ───────── */
+
+  function wireCamera() {
+    var btn = $('#mode-camera');
+    var panel = $('#cam');
+    var video = $('#cam-video');
+    var stream = null;
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      btn.disabled = true;
+      btn.title = 'This browser has no camera API.';
+      return;
+    }
+
+    function close() {
+      if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+      video.srcObject = null;
+      panel.hidden = true;
+      $('#ws-drop').hidden = false;
+      setMode('text');
+    }
+
+    function open() {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        .then(function (st) {
+          stream = st;
+          video.srcObject = st;
+          video.play();
+          panel.hidden = false;
+          $('#ws-drop').hidden = true;
+          setMode('camera');
+        })
+        .catch(function (err) {
+          toast(err && err.name === 'NotAllowedError'
+            ? 'Camera access was refused.'
+            : 'No camera available.');
+          setMode('text');
+        });
+    }
+
+    btn.addEventListener('click', function () { if (stream) close(); else open(); });
+    $('#cam-stop').addEventListener('click', close);
+    $('#cam-shot').addEventListener('click', function () {
+      if (!stream || !video.videoWidth) return;
+      var c = document.createElement('canvas');
+      c.width = video.videoWidth;
+      c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0);
+      c.toBlob(function (blob) {
+        if (!blob) return;
+        var name = 'camera-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.jpg';
+        addFiles([new File([blob], name, { type: 'image/jpeg' })]);
+        close();
+      }, 'image/jpeg', 0.92);
+    });
+  }
+
+  function setMode(m) {
+    $('#mode-label').textContent = 'mode :: ' + m;
+    ['text', 'voice', 'camera'].forEach(function (k) {
+      var b = $('#mode-' + k);
+      b.classList.toggle('is-on', k === m);
+      b.setAttribute('aria-selected', String(k === m));
+    });
+  }
+
   /* ── go ────────────────────────────────────────────────────────────── */
 
   wireInput();
   wireTransport();
+  wireVoice();
+  wireCamera();
   renderFiles();
   loadHealth();
   loadSamples();

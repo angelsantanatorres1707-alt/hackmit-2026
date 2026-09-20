@@ -15,7 +15,6 @@
   <a class="ws-brand" href="index.html" title="Back to the landing page">
     <img src="logo.png" alt="Noema" width="545" height="200">
   </a>
-  <span class="ws-path" id="ws-path">~/workspace/<b>untitled</b></span>
   <div class="ws-chips">
     <span class="ws-chip" id="chip-extract"><i></i>EXTRACTOR: <b>…</b></span>
     <span class="ws-chip" id="chip-engine"><i></i>MANIM_ENGINE: <b>…</b></span>
@@ -28,7 +27,6 @@
   <section class="pane">
     <div class="pane-head">
       <span class="pane-title"><i></i>Workspace</span>
-      <span class="pane-stat" id="stat-input">input :: awaiting</span>
     </div>
 
     <div class="pane-body">
@@ -46,6 +44,14 @@
         </div>
       </div>
 
+      <div class="cam" id="cam" hidden>
+        <video id="cam-video" playsinline muted></video>
+        <div class="cam-bar">
+          <button class="ws-btn" type="button" id="cam-shot">Take photo</button>
+          <button class="ws-btn" type="button" id="cam-stop">Close camera</button>
+        </div>
+      </div>
+
       <ul class="ws-files" id="ws-files"></ul>
       <div class="ws-notice" id="ws-notice" hidden></div>
     </div>
@@ -54,17 +60,17 @@
     <div class="composer">
       <div class="composer-head">
         <div class="composer-modes" role="tablist">
-          <button class="mode is-on" type="button" role="tab" aria-selected="true">
+          <button class="mode is-on" type="button" role="tab" aria-selected="true" id="mode-text">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M12 6v13M9 19h6"/></svg>Text
           </button>
-          <button class="mode" type="button" role="tab" aria-selected="false" disabled title="Not wired up yet">
+          <button class="mode" type="button" role="tab" aria-selected="false" id="mode-voice">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>Voice
           </button>
-          <button class="mode" type="button" role="tab" aria-selected="false" disabled title="Not wired up yet">
+          <button class="mode" type="button" role="tab" aria-selected="false" id="mode-camera">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="4"/></svg>Camera
           </button>
         </div>
-        <span class="composer-mode-label">mode :: text</span>
+        <span class="composer-mode-label" id="mode-label">mode :: text</span>
       </div>
 
       <ol class="ws-log" id="ws-log"></ol>
