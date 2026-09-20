@@ -399,8 +399,7 @@
 
 /* the kept problem */
 .prob-shown { margin-bottom: 16px; }
-.prob-shown-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.prob-shown-label { font-size: 0.86rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); }
+.prob-shown-head { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .prob-imgs { display: flex; flex-wrap: wrap; gap: 8px; }
 .prob-imgs img { max-width: 100%; max-height: 240px; border-radius: 9px; display: block; }
 .prob-imgs:empty { display: none; }
