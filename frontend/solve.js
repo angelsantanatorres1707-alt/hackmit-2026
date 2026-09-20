@@ -686,8 +686,10 @@
     global.scrollTo(0, 0);
   }
 
+  /* There is no Next on step 2: Run analysis is the way forward, and a second
+     button beside it that only changed the scenery invited a click that would
+     have shown an empty frame. start() moves you here itself. */
   function wireSlides() {
-    $('#go-animation').addEventListener('click', function () { showSlide(3); });
     $('#back-to-work').addEventListener('click', function () { showSlide(2); });
   }
 
