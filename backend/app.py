@@ -155,6 +155,20 @@ def analyze_extraction(ext: Extraction, meta: dict, *, wait: bool, quality: Opti
     t0 = time.time()
     crashes: list[str] = []
 
+    # A problem typed as one sentence -- "Compute AB where A = [2 -1; 3 1] and
+    # B = [4 0; 2 5]" -- carried its matrices in prose that nothing downstream
+    # could see. With no givens the verifier had nothing to check against, found
+    # nothing wrong, and told the student their wrong work was fine. Fill the
+    # gaps from the statement before verifying. Additive only, and never allowed
+    # to fail the request.
+    enrich_notes: list[str] = []
+    try:
+        from . import problem_parse
+
+        enrich_notes = problem_parse.enrich(ext.problem)
+    except Exception as exc:  # noqa: BLE001
+        crashes.append(f"could not read the typed problem ({type(exc).__name__}: {exc})")
+
     # verify and plan are pure functions over student-supplied data, and the
     # student supplies it by photographing a page. Neither one gets to 500 the
     # request: a page we cannot check still has to come back as a read-back the
@@ -227,6 +241,7 @@ def analyze_extraction(ext: Extraction, meta: dict, *, wait: bool, quality: Opti
     if meta.get("fell_back_because"):
         job["warnings"].append(meta["fell_back_because"])
     job["warnings"].extend(crashes)
+    job["notes"] = list(job.get("notes") or []) + enrich_notes
     job["degraded"] = bool(crashes)
 
     # The hint is the product. An empty one is a blank panel on the projector,
