@@ -1361,6 +1361,16 @@ def match_signature(S: Val, env: dict[str, Val], expected: Optional[Val], step: 
     # perpendicular. Nothing per-step catches that, so it is caught here, by
     # the property that defines an orthogonal projection -- b minus the
     # projection must be perpendicular to the whole subspace.
+    # LA32: their answer is the projection onto a DIFFERENT coordinate axis.
+    # Checked before LA31 because it is the more specific reading, and much the
+    # more useful one: "you projected onto the other axis" is something a
+    # student can see and fix, where "you returned the residual" is a term they
+    # may not have met. In R2 the two coincide; in R3 they do not.
+    if S.is_matrix:
+        _wrong = _wrong_axis_projection(env, s)
+        if _wrong is not None:
+            checks.append(("LA32", lambda: True))
+
     # LA31: they returned the part of v that is PERPENDICULAR to the target --
     # the dropped vertical -- instead of the shadow lying along it. Both are
     # honest pieces of v and the pair sums to v, which is exactly why the swap
@@ -1434,6 +1444,35 @@ def match_signature(S: Val, env: dict[str, Val], expected: Optional[Val], step: 
 
 
 _SWAP = re.compile(r"(swap|interchang|<->|<=>|R1\s*<|R2\s*<|↔)", re.I)
+
+
+def wrong_axis_name(env: dict[str, Val], claimed) -> Optional[str]:
+    """The axis the student ACTUALLY projected onto, when it is not the one
+    the problem named. -> "y-axis", or None."""
+    idx = _wrong_axis_projection(env, claimed)
+    return AXIS_NAMES[idx] if idx is not None and idx < len(AXIS_NAMES) else None
+
+
+def _wrong_axis_projection(env: dict[str, Val], claimed) -> Optional[int]:
+    axis = env.get(AXIS_SYMBOL)
+    subject = _projection_subject(env)
+    if axis is None or subject is None or claimed is None:
+        return None
+    try:
+        col = _col(claimed if isinstance(claimed, sp.MatrixBase) else claimed.obj)
+        n = subject.rows
+        if col.rows != n:
+            return None
+        asked = next((k for k in range(n) if axis.obj[k] != 0), None)
+        for k in range(n):
+            if k == asked:
+                continue
+            onto_k = sp.Matrix([subject[j] if j == k else 0 for j in range(n)])
+            if sp.simplify(col - onto_k).is_zero_matrix:
+                return k
+    except Exception:  # noqa: BLE001
+        return None
+    return None
 
 
 def _projection_subject(env: dict[str, Val]):
@@ -1564,6 +1603,19 @@ _PROJECTION_WORD = re.compile(r"\bproject\w*\b|\bcomponent\s+(?:of|along)\b"
                               r"|\bshadow\b", re.I)
 
 
+AXIS_NAMES = ("x-axis", "y-axis", "z-axis")
+
+
+def named_axis_index(text: str, dim: int) -> Optional[int]:
+    """-> 0/1/2 for the single axis this wording names, or None."""
+    if not text or dim not in (2, 3):
+        return None
+    hits = [i for rx, i in _AXIS_WORDS if rx.search(text)]
+    if len(hits) != 1 or hits[0] >= dim:
+        return None
+    return hits[0]
+
+
 def named_axis(text: str, dim: int) -> Optional["sp.Matrix"]:
     """-> the axis this wording names, as a basis vector of R^dim, or None.
 
@@ -1572,10 +1624,10 @@ def named_axis(text: str, dim: int) -> Optional["sp.Matrix"]:
     """
     if not text or dim not in (2, 3):
         return None
-    hits = [i for rx, i in _AXIS_WORDS if rx.search(text)]
-    if len(hits) != 1 or hits[0] >= dim:
+    i = named_axis_index(text, dim)
+    if i is None:
         return None
-    return sp.Matrix([1 if k == hits[0] else 0 for k in range(dim)])
+    return sp.Matrix([1 if k == i else 0 for k in range(dim)])
 
 
 def _axis_from_problem(ext: Extraction, env: dict[str, Val]) -> Optional["sp.Matrix"]:
@@ -1605,7 +1657,12 @@ def _given_envs(ext: Extraction, cap: int = 4) -> list[dict[str, Val]]:
             base[g.symbol] = v
     axis = _axis_from_problem(ext, base)
     if axis is not None and AXIS_SYMBOL not in base:
-        base[AXIS_SYMBOL] = Val("vector", axis, "column")
+        # `text` carries the axis's NAME so the hint and the scene label can
+        # say "the x-axis" rather than "the axis" -- which is the whole of
+        # what makes a mix-up between two axes legible on screen.
+        idx = next((k for k in range(axis.rows) if axis[k] != 0), 0)
+        base[AXIS_SYMBOL] = Val("vector", axis, "column",
+                                text=AXIS_NAMES[idx] if idx < 3 else "the axis")
     envs = [base]
     for g in ext.problem.givens:
         for alt in g.alternates[:1]:

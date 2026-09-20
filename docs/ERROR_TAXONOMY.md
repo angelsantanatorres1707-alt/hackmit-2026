@@ -589,6 +589,25 @@ exactly why students hand back the wrong one.
   non-axis subspace ("the line y = 2x"), or a task that is not a projection ("reflect v
   across the x-axis") all leave the machinery switched off rather than guessing.
 
+### LA32 — projected onto the other axis
+**Topic:** projection · **Visual:** strong
+
+Checked BEFORE LA31, because it is the more specific reading and much the more useful
+one: "you projected onto the other axis" is something a student can see and fix, where
+"you returned the residual" uses a word they may not have met yet. In R2 the two
+descriptions pick out the same vector; in R3 they part company, and both codes earn
+their place.
+
+- **Student writes:** `v = (3,2)`, asked for the x-axis, answers `(0,2)` — which is the
+  projection onto the y-axis
+- **Check:** the claim equals the projection onto some coordinate axis OTHER than the one
+  the problem named
+- **Scene:** `VectorOpCompare` (`op="projection"`), with the target axis LABELLED by name
+  rather than called "the axis" — that label is most of what makes the mix-up legible:
+  the white shadow lies along the x-axis, the student's arrow stands up the y-axis
+- **Hint:** "A shadow falls onto the line you were asked about, and lands ALONG it. Look
+  at which line your own arrow is sitting on."
+
 ---
 
 ### LA19 — projection with the wrong denominator

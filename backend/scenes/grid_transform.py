@@ -43,6 +43,7 @@ from helpers import (  # noqa: E402
     STUDENT,
     MAT_Y,
     Z_CHROME,
+    Z_FLASH,
     ParamScene,
     SceneParamError,
     VecArrow,
@@ -57,6 +58,10 @@ from helpers import (  # noqa: E402
 )
 
 TRACK_COLORS = (I_HAT, J_HAT, PROBE)
+
+# Between the panel's bottom edge (-2.96) and the hint block, which
+# grows upward from -3.82. Nothing else lives in this band.
+EXPR_Y = -3.24
 
 
 class GridTransformCompare(ParamScene):
@@ -79,6 +84,13 @@ class GridTransformCompare(ParamScene):
         "ghost_reference": False,
         "pause_between_stages": 0.8,
         "track_vectors": [[1, 0], [0, 1]],
+        # The running expression under each panel: starts as the vector's own
+        # name and grows a symbol on the FRONT every time a map is applied, so
+        # v becomes Bv becomes ABv. Which multiplication just happened stops
+        # being something the viewer has to infer from the grid.
+        "expr_vector": None,
+        "student_symbols": None,
+        "correct_symbols": None,
     }
 
     # ------------------------------------------------------------------
@@ -200,6 +212,25 @@ class GridTransformCompare(ParamScene):
         caption = None
         labels = p["stage_labels"]
 
+        # -- the running expression ------------------------------------
+        expr_v = p.get("expr_vector")
+        l_syms = list(p.get("student_symbols") or [])
+        r_syms = list(p.get("correct_symbols") or [])
+        show_expr = bool(expr_v) and len(l_syms) == len(r_syms) == n_stages
+
+        def _expr_at(text, x, color):
+            m = label_text(text, font_size=30, color=color, max_width=5.4,
+                           weight="BOLD")
+            m.move_to(np.array([x, EXPR_Y, 0.0])).set_z_index(Z_CHROME)
+            return m
+
+        l_expr = r_expr = None
+        if show_expr:
+            lx = float(lay.left.origin[0])
+            rx = float(lay.right.origin[0])
+            l_expr = _expr_at(expr_v, lx, STUDENT)
+            r_expr = _expr_at(expr_v, rx, CORRECT)
+
         # -- 0.0 / 1.2 --------------------------------------------------
         if lay.ghosts is not None:
             self.add(lay.ghosts)
@@ -211,6 +242,8 @@ class GridTransformCompare(ParamScene):
                  FadeIn(lay.l_mat), FadeIn(lay.r_mat)]
         for a in l_arrows + r_arrows:
             intro.append(FadeIn(a.mob, scale=0.6))
+        if show_expr:
+            intro += [FadeIn(l_expr), FadeIn(r_expr)]
         if labels and n_stages > 1:
             # Between the panels there is now only ~0.8 of gutter, so the
             # stage caption goes in the free column between the two matrices
@@ -226,11 +259,23 @@ class GridTransformCompare(ParamScene):
 
         # -- the act ----------------------------------------------------
         stage_rt = 3.0 if n_stages == 1 else (2.5 if n_stages == 2 else 2.0)
+        l_text, r_text = expr_v, expr_v
         for k in range(n_stages):
+            grow = []
+            if show_expr:
+                # The new symbol goes on the FRONT: applying B to v gives Bv,
+                # and applying A to that gives ABv.
+                l_text = f"{l_syms[k]}{l_text}"
+                r_text = f"{r_syms[k]}{r_text}"
+                grow = [
+                    Transform(l_expr, _expr_at(l_text, float(lay.left.origin[0]), STUDENT)),
+                    Transform(r_expr, _expr_at(r_text, float(lay.right.origin[0]), CORRECT)),
+                ]
             self.play(*apply_matrix_anims(lay.left, s_stages[k], l_arrows,
                                           run_time=stage_rt),
                       *apply_matrix_anims(lay.right, c_stages[k], r_arrows,
-                                          run_time=stage_rt))
+                                          run_time=stage_rt),
+                      *grow)
             if k < n_stages - 1:
                 # Pause on the intermediate. For LA02 this is the whole point:
                 # both grids are still identical here, so pulse the borders to
@@ -259,6 +304,17 @@ class GridTransformCompare(ParamScene):
             self.play(Indicate(VGroup(*[a.mob for a in l_arrows]), color=STUDENT),
                       Indicate(VGroup(*[a.mob for a in r_arrows]), color=CORRECT),
                       run_time=1.0)
+
+        # -- say plainly that the two do not agree ---------------------
+        if show_expr and l_text != r_text:
+            ne = label_text("\u2260", font_size=44, color=PROBE, max_width=1.0,
+                            weight="BOLD")
+            ne.move_to(np.array([0.0, EXPR_Y, 0.0])).set_z_index(Z_FLASH)
+            self.play(FadeIn(ne, scale=1.6),
+                      Indicate(l_expr, color=STUDENT, scale_factor=1.16),
+                      Indicate(r_expr, color=CORRECT, scale_factor=1.16),
+                      run_time=1.1)
+            self.wait(0.8)
 
         # -- hint + settle ---------------------------------------------
         self.play(Write(lay.hint), run_time=0.8)

@@ -244,6 +244,9 @@ HINTS: dict[str, tuple[str, str]] = {
              "that stands away from it at a right angle -- the piece left over, not "
              "the shadow. Watch which of the two you drew in {step}.",
              "watch which piece lies along the axis"),
+    "LA32": ("A shadow falls onto the line you were asked about, and lands ALONG it. "
+             "Look at which line your own arrow is sitting on in {step}.",
+             "watch which line your arrow sits on"),
     "LA28": ("A vector can sit on an eigen-line and still belong to a different "
              "stretch. Watch how far along its own line {step} sends it, against how "
              "far the eigenvalue you paired it with would.",
@@ -522,7 +525,8 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
         "LA04": _determinant, "LA05": _determinant, "LA06": _determinant,
         "LA09": _eigen_vector, "LA10": _eigen_value,
         "LA11": _vector_op, "LA17": _vector_op, "LA19": _vector_op,
-        "LA20": _vector_op, "LA21": _vector_op, "LA31": _vector_op,
+        "LA20": _vector_op, "LA21": _vector_op,
+        "LA31": _vector_op, "LA32": _vector_op,
         "LA22": _angle_property, "LA23": _angle_property,
         "LA24": _grid_order,
         "LA28": _eigen_vector,
@@ -730,10 +734,25 @@ def _grid_order(verdict, ext, env, S, C):
     # round from one who writes "AB" and computes BA, and guessing from the
     # label alone puts the correct order under "WHAT YOU WROTE".
     stages = _order_matching(env, S, a, b) or [a, b]
-    other = [b, a] if stages == [a, b] else [a, b]
+    student_first_is_A = stages[0] is a
+    other = [b, a] if student_first_is_A else [a, b]
+    # Symbol names in APPLIED order, so the running expression under each panel
+    # grows the right letter on the front at the right moment.
+    s_syms = ["A", "B"] if student_first_is_A else ["B", "A"]
+    c_syms = list(reversed(s_syms))
+    vname = next((n for n in ("v", "x", "u", "w") if _flat(env.get(n))), None)
     return "GridTransformCompare", {
         "student_stages": stages,
         "correct_stages": other,
+        "expr_vector": vname,
+        "student_symbols": s_syms if vname else None,
+        "correct_symbols": c_syms if vname else None,
+        # Straight into the comparison: the generic title card and the
+        # hard-coded concept beat in front of it were teaching a different
+        # matrix than the student's, and the title below says the same thing
+        # in one line.
+        "skip_prologue": True,
+        "title": "matrix multiplication transforms the whole plane",
         "student_display": _display(S),
         "correct_display": _display(C),
         "stage_labels": ["first", "then"],
@@ -900,8 +919,10 @@ def _vector_op(verdict, ext, env, S, C):
     eid = verdict.error_id
     op = {"LA11": "normalize", "LA17": "cross", "LA19": "projection",
           "LA20": "projection", "LA21": "projection",
-          "LA31": "projection"}.get(eid or "", "generic")
-    axis = _flat(env.get("axis"))
+          "LA31": "projection", "LA32": "projection"}.get(eid or "", "generic")
+    axis_val = env.get("axis")
+    axis_name = (getattr(axis_val, "text", None) or "the axis") if axis_val else None
+    axis = _flat(axis_val)
     if axis:
         # A named coordinate axis is the thing being projected ONTO; the one
         # other vector in scope is what is being projected.
@@ -940,7 +961,7 @@ def _vector_op(verdict, ext, env, S, C):
     return "VectorOpCompare", {
         "op": op, "u": u, "v": v,
         "w_claimed": w_claimed, "w_correct": w_correct,
-        "labels": {"u": "v", "v": "the axis"} if axis else {"u": "u", "v": "v"},
+        "labels": {"u": "v", "v": axis_name} if axis else {"u": "u", "v": "v"},
         "readouts": readouts,
         "ambient": dim,
         "student_label": "YOUR ANSWER", "correct_label": "THE PROPERTY IT MUST HAVE",

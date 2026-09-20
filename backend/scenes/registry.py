@@ -170,7 +170,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "scene": "VectorOpCompare",
         "priority": "P1",
         "duration": 10.0,
-        "covers": ["LA11", "LA19", "LA31", "LA17(3D, P2)"],
+        "covers": ["LA11", "LA19", "LA31", "LA32", "LA17(3D, P2)"],
         "summary": "One plane, the invariant the operation must satisfy, the "
                    "true answer satisfying it, the claimed answer breaking it.",
         "param_schema": {

@@ -27,7 +27,7 @@ sys.path.insert(0, str(REPO))
 
 from backend.extract import Extraction  # noqa: E402
 from backend.hints import plan  # noqa: E402
-from backend.verify import named_axis, verify  # noqa: E402
+from backend.verify import named_axis, verify, wrong_axis_name  # noqa: E402
 
 
 def vec(*x):
@@ -56,18 +56,22 @@ Y = "Find the orthogonal projection of v onto the y-axis."
 
 CASES = [
     # (name, expect_wrong, expect_error_id, extraction)
-    ("T1  x-axis, answered (0,2) -- the residual", True, "LA31",
+    # In R2 the residual and the other axis are the SAME vector, and "you
+    # projected onto the other axis" is the reading a student can act on.
+    ("T1  x-axis, answered (0,2) -- the y-axis instead", True, "LA32",
      ext(X, "projection of v onto the x-axis", (3, 2), (0, 2))),
     ("T2  x-axis, answered (3,0) -- correct", False, None,
      ext(X, "projection of v onto the x-axis", (3, 2), (3, 0))),
     ("T3  y-axis, answered (0,2) -- correct", False, None,
      ext(Y, "projection of v onto the y-axis", (3, 2), (0, 2))),
-    ("T4  paraphrase: 'component along the horizontal axis'", True, "LA31",
+    ("T4  paraphrase: 'component along the horizontal axis'", True, "LA32",
      ext("Find the component of v along the horizontal axis.",
          "component of v along the horizontal axis", (3, 2), (0, 2))),
     ("T5  3D z-axis, answered (0,0,5) -- correct", False, None,
      ext("Project v onto the z-axis.", "projection of v onto the z-axis",
          (1, 4, 5), (0, 0, 5))),
+    # In R3 they part company: (1,4,0) is the residual but is not the
+    # projection onto any single axis, so this stays LA31.
     ("T6  3D z-axis, answered (1,4,0) -- the residual", True, "LA31",
      ext("Project v onto the z-axis.", "projection of v onto the z-axis",
          (1, 4, 5), (1, 4, 0))),
@@ -80,6 +84,9 @@ CASES = [
          "projections onto the x-axis and the y-axis", (3, 2), (3, 0))),
     ("C3  axis named but the task is not a projection", False, None,
      ext("Reflect v across the x-axis.", "the reflection of v", (3, 2), (3, -2))),
+    ("T7  3D x-axis, answered (0,4,0) -- the y-axis instead", True, "LA32",
+     ext("Project v onto the x-axis.", "projection of v onto the x-axis",
+         (1, 4, 5), (0, 4, 0))),
 ]
 
 
@@ -94,6 +101,11 @@ def main() -> int:
     assert named_axis("onto the x-axis and y-axis", 2) is None, "ambiguous"
     assert named_axis("onto the line y = 2x", 2) is None, "not an axis"
     print("  PASS  named_axis parsing")
+
+    # The axis a mixed-up answer actually landed on, named.
+    _v = verify(ext(X, "projection of v onto the x-axis", (3, 2), (0, 2)))
+    assert wrong_axis_name(_v.givens, _v.student_value) == "y-axis"
+    print("  PASS  wrong_axis_name identifies the axis actually used")
 
     for name, expect_wrong, expect_id, e in CASES:
         v = verify(e)
