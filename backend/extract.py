@@ -668,7 +668,12 @@ def load_fixture(name: str) -> Extraction:
     return Extraction.model_validate(blob)
 
 
-DEFAULT_FIXTURE = os.environ.get("FIXTURE_NAME", "la_multiply")
+# The demo runs on photographs, and reading a photograph needs a live vision
+# call. On venue wifi, with no key set, fixture mode is what actually answers
+# an upload -- so the fixture an unrecognised upload falls back to is the one
+# the demo is given. la_demo is the photographed product on the demo sheet.
+# Override with FIXTURE_NAME to get any other one back.
+DEFAULT_FIXTURE = os.environ.get("FIXTURE_NAME", "la_demo")
 
 
 def _fixture_for(filenames: list[str] | None, explicit: str | None) -> str:

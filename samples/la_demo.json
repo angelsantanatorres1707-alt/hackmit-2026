@@ -1,0 +1,261 @@
+{
+  "document": {
+    "page_count": 1,
+    "legibility": "clean",
+    "orientation_ok": true,
+    "multiple_problems_detected": false,
+    "notes": "Blue pen on squared paper. One product, worked in two lines."
+  },
+  "problem": {
+    "present": true,
+    "statement": "Compute the product of the two matrices.",
+    "topic": "matrix_multiply",
+    "asks_for": "the product AB",
+    "confidence": 0.97,
+    "givens": [
+      {
+        "symbol": "A",
+        "object": {
+          "kind": "matrix",
+          "shape": [
+            2,
+            2
+          ],
+          "orientation": null,
+          "rows": [
+            [
+              2,
+              5
+            ],
+            [
+              0,
+              3
+            ]
+          ],
+          "exact": null,
+          "scalars": null,
+          "exact_scalars": null,
+          "var": null,
+          "text": null,
+          "wrote_decimals": false
+        },
+        "source": "printed",
+        "ambiguities": [],
+        "alternates": [],
+        "confidence": 0.98
+      },
+      {
+        "symbol": "B",
+        "object": {
+          "kind": "matrix",
+          "shape": [
+            2,
+            2
+          ],
+          "orientation": null,
+          "rows": [
+            [
+              6,
+              4
+            ],
+            [
+              1,
+              3
+            ]
+          ],
+          "exact": null,
+          "scalars": null,
+          "exact_scalars": null,
+          "var": null,
+          "text": null,
+          "wrote_decimals": false
+        },
+        "source": "printed",
+        "ambiguities": [],
+        "alternates": [],
+        "confidence": 0.98
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "student_label": null,
+      "page": 1,
+      "reading_order": 1,
+      "bbox": {
+        "x": 110,
+        "y": 70,
+        "w": 700,
+        "h": 110
+      },
+      "raw_text": "[2 5 ; 0 3] \u00b7 [6 4 ; 1 3]",
+      "claimed_expression": "A, B",
+      "claimed_operation": "copy_given",
+      "op_args": {
+        "rows": null,
+        "scalar": null,
+        "source_symbols": [
+          "A",
+          "B"
+        ],
+        "note": "the product as it was set up"
+      },
+      "value": {
+        "kind": "matrix",
+        "shape": [
+          2,
+          2
+        ],
+        "orientation": null,
+        "rows": [
+          [
+            2,
+            5
+          ],
+          [
+            0,
+            3
+          ]
+        ],
+        "exact": null,
+        "scalars": null,
+        "exact_scalars": null,
+        "var": null,
+        "text": null,
+        "wrote_decimals": false
+      },
+      "alternates": [],
+      "ambiguities": [],
+      "crossed_out": false,
+      "is_final_answer": false,
+      "parse_ok": true,
+      "confidence": 0.95,
+      "confidence_reason": null
+    },
+    {
+      "id": "s2",
+      "student_label": null,
+      "page": 1,
+      "reading_order": 2,
+      "bbox": {
+        "x": 580,
+        "y": 70,
+        "w": 360,
+        "h": 110
+      },
+      "raw_text": "= [2\u00b76  2\u00b74 ; 0\u00b71  3\u00b73]",
+      "claimed_expression": "AB",
+      "claimed_operation": "multiply",
+      "op_args": {
+        "rows": null,
+        "scalar": null,
+        "source_symbols": [
+          "A",
+          "B"
+        ],
+        "note": "each entry written as a single product of two entries, no sum"
+      },
+      "value": null,
+      "alternates": [],
+      "ambiguities": [],
+      "crossed_out": false,
+      "is_final_answer": false,
+      "parse_ok": false,
+      "confidence": 0.55,
+      "confidence_reason": "entry-by-entry products, written without the sums that make a product entry"
+    },
+    {
+      "id": "s3",
+      "student_label": null,
+      "page": 1,
+      "reading_order": 3,
+      "bbox": {
+        "x": 640,
+        "y": 195,
+        "w": 300,
+        "h": 110
+      },
+      "raw_text": "= [12  8 ; 0  9]",
+      "claimed_expression": "AB",
+      "claimed_operation": "multiply",
+      "op_args": {
+        "rows": null,
+        "scalar": null,
+        "source_symbols": [
+          "A",
+          "B"
+        ],
+        "note": null
+      },
+      "value": {
+        "kind": "matrix",
+        "shape": [
+          2,
+          2
+        ],
+        "orientation": null,
+        "rows": [
+          [
+            12,
+            8
+          ],
+          [
+            0,
+            9
+          ]
+        ],
+        "exact": null,
+        "scalars": null,
+        "exact_scalars": null,
+        "var": null,
+        "text": null,
+        "wrote_decimals": false
+      },
+      "alternates": [],
+      "ambiguities": [],
+      "crossed_out": false,
+      "is_final_answer": true,
+      "parse_ok": true,
+      "confidence": 0.98,
+      "confidence_reason": null
+    }
+  ],
+  "final_answer": {
+    "step_id": "s3",
+    "object": {
+      "kind": "matrix",
+      "shape": [
+        2,
+        2
+      ],
+      "orientation": null,
+      "rows": [
+        [
+          12,
+          8
+        ],
+        [
+          0,
+          9
+        ]
+      ],
+      "exact": null,
+      "scalars": null,
+      "exact_scalars": null,
+      "var": null,
+      "text": null,
+      "wrote_decimals": false
+    }
+  },
+  "extraction": {
+    "unreadable_regions": [],
+    "warnings": []
+  },
+  "_meta": {
+    "title": "Compute AB - each entry taken as a single product, never a sum",
+    "error_id": null,
+    "topic": "matrix_multiply",
+    "expect": "first_error at s2; no taxonomy signature; GridTransformCompare via Layer 1"
+  }
+}
