@@ -12,7 +12,9 @@ Selection is automatic - set a key and it is used::
     export ANTHROPIC_API_KEY=sk-ant-...       # backend/extract.py's own path
     export OPENROUTER_API_KEY=sk-or-...       # free tier, many models
 
-With several set, the order above decides. Force one with
+With several set the order above decides, OpenAI first -- an ANTHROPIC_API_KEY
+left in a shell for unrelated reasons must not outrank the key someone set for
+this app. Force one with
 ``VISION_PROVIDER=openai|gemini|anthropic|openrouter``, and check what a key can
 actually reach with::
 
@@ -53,6 +55,43 @@ OPENAI_BASE = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rst
 OPENAI_URL = f"{OPENAI_BASE}/chat/completions"
 OPENAI_MODELS_URL = f"{OPENAI_BASE}/models"
 
+# Only so describe() can name the model for EVERY provider. The Anthropic call
+# itself lives in backend/extract.py and reads the same variable.
+ANTHROPIC_MODEL = os.environ.get("EXTRACTION_MODEL", "claude-opus-5")
+
+
+# ---------------------------------------------------------------------------
+# THE PIN
+#
+# This project reads photographs with OpenAI. Full stop.
+#
+# It is pinned in code, not left to whichever key happens to be exported,
+# because several agents edit this repo and provider selection had already
+# drifted once: an ANTHROPIC_API_KEY sitting in a shell silently outranked the
+# OpenAI key that was set for this app, and /api/health then named a model
+# nobody had configured.
+#
+# While pinned, every other provider's key is IGNORED -- not ranked lower,
+# ignored -- and a missing OPENAI_API_KEY is an error that names the fix rather
+# than a quiet fallback to some other API.
+#
+# The one escape hatch is deliberately awkward to reach by accident and exists
+# for one situation: OpenAI is down mid-demo and you need Gemini's free tier
+# right now. It is an environment variable, so no code edit can flip it:
+#
+#     UNPIN_VISION_PROVIDER=1 VISION_PROVIDER=gemini bash scripts/run.sh --live
+#
+# backend/tests/test_provider_pin.py fails if this constant changes, so an
+# agent that "helpfully" reorders providers breaks a test instead of the demo.
+# ---------------------------------------------------------------------------
+PINNED_PROVIDER = "openai"
+
+
+def pin_released() -> bool:
+    return (os.environ.get("UNPIN_VISION_PROVIDER") or "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
 
 class ProviderError(RuntimeError):
     """A vision call failed in a way worth showing a human."""
@@ -61,22 +100,61 @@ class ProviderError(RuntimeError):
 # ---------------------------------------------------------------- selection
 
 def available_providers() -> list[str]:
+    """Providers with a key, best first.
+
+    OpenAI leads deliberately. ANTHROPIC_API_KEY is commonly already exported in
+    a shell for unrelated reasons, and when it silently outranked the key
+    someone had just set for this app, the app used a provider they never chose
+    and /api/health named a model they had not configured.
+    """
     out = []
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        out.append("anthropic")
     if os.environ.get("OPENAI_API_KEY"):
         out.append("openai")
     if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
         out.append("gemini")
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        out.append("anthropic")
     if os.environ.get("OPENROUTER_API_KEY"):
         out.append("openrouter")
     return out
 
 
+def active_model() -> str | None:
+    """The model a photo would actually be sent to right now."""
+    try:
+        provider = active_provider()
+    except ProviderError:
+        return None
+    return {
+        "openai": OPENAI_MODEL,
+        "gemini": GEMINI_MODEL,
+        "anthropic": ANTHROPIC_MODEL,
+        "openrouter": OPENROUTER_MODEL,
+    }.get(provider)
+
+
 def active_provider() -> str | None:
-    """Which provider a photo would actually go to right now, or None."""
-    forced = (os.environ.get("VISION_PROVIDER") or "").strip().lower()
+    """Which provider a photo would actually go to right now, or None.
+
+    Pinned to OpenAI unless UNPIN_VISION_PROVIDER is set -- see THE PIN above.
+    """
     have = available_providers()
+
+    if PINNED_PROVIDER and not pin_released():
+        if PINNED_PROVIDER in have:
+            return PINNED_PROVIDER
+        others = [p for p in have if p != PINNED_PROVIDER]
+        raise ProviderError(
+            f"{_key_name(PINNED_PROVIDER)} is not set, and this project is "
+            f"pinned to {PINNED_PROVIDER}. Run: bash scripts/setkey.sh"
+            + (
+                f"  (ignoring the key(s) for {', '.join(others)} -- the pin is "
+                "deliberate; set UNPIN_VISION_PROVIDER=1 only if OpenAI is down)"
+                if others else ""
+            )
+        )
+
+    forced = (os.environ.get("VISION_PROVIDER") or "").strip().lower()
     if forced:
         if forced not in ("anthropic", "openai", "gemini", "openrouter"):
             raise ProviderError(
@@ -112,12 +190,9 @@ def describe() -> dict[str, Any]:
     return {
         "active": active,
         "available": available_providers(),
-        "model": {
-            "gemini": GEMINI_MODEL,
-            "openai": OPENAI_MODEL,
-            "openrouter": OPENROUTER_MODEL,
-        }.get(active),
+        "model": active_model(),
         "problem": problem,
+        "pinned_to": None if pin_released() else PINNED_PROVIDER,
     }
 
 

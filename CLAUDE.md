@@ -68,6 +68,29 @@ the relevant area.
   away instead of transforming in place.
 - Full list of traps: `docs/RENDERING.md`.
 
+### Vision provider — pinned, do not change
+
+**Photographs are read with OpenAI. Nothing else.** `PINNED_PROVIDER = "openai"`
+in `backend/vision_providers.py` is the single source of truth. While it is set,
+every other provider's key is *ignored*, not merely ranked lower, and a missing
+`OPENAI_API_KEY` is a loud error rather than a quiet fallback to another API.
+
+This is pinned because it already drifted: an `ANTHROPIC_API_KEY` sitting in a
+shell outranked the OpenAI key set for this app, and `/api/health` reported a
+model nobody had configured.
+
+Do not "fix" provider selection, reorder `available_providers()`, or restore an
+Anthropic default. `backend/tests/test_provider_pin.py` fails if you do.
+
+The only escape hatch is an environment variable — no code edit flips it — and
+it exists for one case: OpenAI is down mid-demo.
+
+```bash
+UNPIN_VISION_PROVIDER=1 VISION_PROVIDER=gemini bash scripts/run.sh --live
+```
+
+Set the key with `bash scripts/setkey.sh`. Never commit one; `.env` is gitignored.
+
 ### The product rules
 
 - **The animation must not print the correct answer.** Numbers on the reference
@@ -112,6 +135,8 @@ the relevant area.
 node --check frontend/app.js                 # JS parses
 bash -n scripts/run.sh                       # shell parses
 .venv/bin/python backend/tests/test_openai_provider.py
+.venv/bin/python backend/tests/test_provider_pin.py      # OpenAI stays pinned
+.venv/bin/python backend/tests/test_step_compiler.py
 ```
 
 Then load the page, click **use sample**, and confirm you get: the read-back

@@ -438,7 +438,11 @@ def health() -> dict:
         "ok": True,
         "fixture_mode": extract_mod.use_fixture_mode(),
         "api_key_present": extract_mod.have_api_key(),
-        "model": extract_mod.MODEL,
+        # The model actually in use, and null when nothing is: extract.MODEL is
+        # the ANTHROPIC default, so it reported "claude-opus-5" both when the
+        # photo was going to OpenAI and when fixture mode was reading no photo
+        # at all -- and app.js prints this as "Reading photos with ...".
+        "model": _vision_health().get("model"),
         # Which vision API a photo would actually reach, and why not, if not.
         # "it silently used a fixture" is the failure this answers in one curl.
         "vision": _vision_health(),
