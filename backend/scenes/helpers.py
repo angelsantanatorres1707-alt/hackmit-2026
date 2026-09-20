@@ -1370,6 +1370,45 @@ class ParamScene(Scene):
     P: dict | None = None
     DURATION = 0.0
 
+    # ---- pacing --------------------------------------------------------
+    # Timing lives in ~220 self.play/self.wait calls across the scenes, so
+    # pacing is applied here instead of edited into each one. Every scene
+    # inherits this, including any added later.
+    #
+    # Motion and pauses are scaled separately on purpose. Slowing the motion
+    # much makes it feel syrupy without helping; what a student actually needs
+    # is longer to LOOK at each finished state before it changes, so the holds
+    # are stretched further than the movement.
+    #
+    # Both are env-tunable so the pace can be changed at demo time without a
+    # code change: SCENE_PACE=1 SCENE_HOLD=1 restores the original timing.
+    @staticmethod
+    def _pace() -> float:
+        try:
+            return max(0.25, min(4.0, float(os.environ.get("SCENE_PACE", "1.25"))))
+        except (TypeError, ValueError):
+            return 1.25
+
+    @staticmethod
+    def _hold() -> float:
+        try:
+            return max(0.25, min(6.0, float(os.environ.get("SCENE_HOLD", "2.0"))))
+        except (TypeError, ValueError):
+            return 2.0
+
+    def play(self, *args, **kwargs):
+        rt = kwargs.get("run_time")
+        if isinstance(rt, (int, float)) and rt > 0:
+            kwargs["run_time"] = rt * self._pace()
+        return super().play(*args, **kwargs)
+
+    def wait(self, duration=1.0, *args, **kwargs):
+        try:
+            duration = float(duration) * self._hold()
+        except (TypeError, ValueError):
+            pass
+        return super().wait(duration, *args, **kwargs)
+
     @classmethod
     def validate(cls, params: dict) -> dict:
         return dict(params)
