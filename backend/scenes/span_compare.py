@@ -176,9 +176,13 @@ class SpanCompare(ParamScene):
         probe = np.array(p["probe"], dtype=float) if p.get("probe") is not None \
             else None
 
-        span_pts = [c * v for v in V for c in (-2.2, 2.2)]
-        unit = fit_unit(span_pts + ([probe] if probe is not None else []),
-                        box=PLANE_BOX)
+        # Fit to what is actually DRAWN -- the input arrows and the probe. The
+        # old list was +-2.2x the longest vector, so a single input like (2,4)
+        # forced a scale where everything, including the gap the whole scene
+        # exists to show, rendered a few pixels wide. The swept line still
+        # crosses the panel: it is clipped to `reach`, which comes from the box.
+        key_pts = list(V) + ([probe] if probe is not None else [])
+        unit = fit_unit(key_pts, box=PLANE_BOX)
         lay = one_panel_layout(self, title=p["title"], hint=p["hint"],
                                dx=PLANE_DX, dy=PLANE_DY, box=PLANE_BOX_W,
                                box_h=PLANE_BOX, unit=unit)
@@ -253,12 +257,22 @@ class SpanCompare(ParamScene):
             back = Line(P.pt(reach * d), P.pt(-reach * d))
             t = float(np.dot(probe, d))
             foot = t * d
-            self.play(FadeIn(p_dot), FadeIn(p_lab), FadeIn(hunter), run_time=0.4)
+            # The input arrows have made their point by now, and when the probe
+            # lands close to the span -- b = (1,3) against the line through
+            # (1,2), a gap of about 0.45 -- an arrow drawn over it hides the one
+            # thing the whole scene is for. Dim them so the miss is unobstructed.
+            self.play(FadeIn(p_dot), FadeIn(p_lab), FadeIn(hunter),
+                      *[a.mob.animate.set_opacity(0.22) for a in arrows],
+                      run_time=0.5)
             self.play(MoveAlongPath(hunter, path), run_time=0.7)
             self.play(MoveAlongPath(hunter, back), run_time=0.7)
             gap = residual(P.pt(foot), P.pt(probe), color=PROBE, label="gap",
-                           font_size=17, away_from=P.origin, label_buff=0.16)
+                           font_size=19, away_from=P.origin, label_buff=0.18)
+            gap.set_z_index(Z_FLASH + 1)
             self.play(FadeIn(gap), FadeOut(hunter), run_time=0.5)
+            # A small gap needs airtime, or the eye reads "it landed on it".
+            self.play(Indicate(gap, scale_factor=1.35, color=PROBE), run_time=0.9)
+            self.wait(0.7)
         else:
             self.wait(1.8)
 
