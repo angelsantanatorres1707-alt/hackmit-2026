@@ -33,6 +33,7 @@ from determinant_area import DeterminantAreaCompare  # noqa: E402
 from eigen_ray import EigenRayTest  # noqa: E402
 from grid_transform import GridTransformCompare  # noqa: E402
 from angle_check import AnglePreservationCheck  # noqa: E402
+from composition_order import CompositionOrderVector  # noqa: E402
 from line_system import LineSystemCompare  # noqa: E402
 from span_compare import SpanCompare  # noqa: E402
 from step_focus import StaticStepHighlight  # noqa: E402
@@ -50,6 +51,28 @@ _L = "planner"   # filled by the LLM
 
 
 TEMPLATES: dict[str, dict[str, Any]] = {
+    "CompositionOrderVector": {
+        "class": CompositionOrderVector,
+        "module": "composition_order",
+        "file": os.path.join(_HERE, "composition_order.py"),
+        "scene": "CompositionOrderVector",
+        "priority": "P0",
+        "duration": 21.0,
+        "covers": ["LA02"],
+        "summary": "The student's own vector, put through their two maps in "
+                   "both orders side by side, ending on two arrows, their "
+                   "expressions, and a not-equals.",
+        "param_schema": {
+            "vector": (_S, "the 2-vector the problem gives"),
+            "vector_name": (_S, "what the page calls it, e.g. 'v'"),
+            "student_stages": (_S, "matrices in APPLIED order, as the student did"),
+            "correct_stages": (_S, "matrices in APPLIED order, as asked"),
+            "student_symbols": (_S, "one symbol per stage, e.g. ['B','A']"),
+            "correct_symbols": (_S, "one symbol per stage"),
+            "opening": (_L, "str, the words over the generic beat"),
+            "hint": (_L, "str, positional only -- see check_hint"),
+        },
+    },
     "AnglePreservationCheck": {
         "class": AnglePreservationCheck,
         "module": "angle_check",

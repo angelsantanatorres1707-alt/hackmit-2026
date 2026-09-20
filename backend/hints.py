@@ -605,7 +605,13 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
     # wrote, it wins, and the comparison we just built becomes the rung below
     # it. When it cannot, nothing here changes and the old ladder runs.
     # ---------------------------------------------------------------------
-    replay = replay_route.build(ext, verdict, student_label="YOUR WORK")
+    # ...with one exception. StepReplay wins because the comparison templates
+    # only show where the work ENDED UP. CompositionOrderVector does not: it
+    # already replays the student's own sequence, on their own vector, beside
+    # the order they were asked for. Demoting it would replace the better
+    # telling of the same story with the generic one.
+    replay = ({"ok": False, "reason": ""} if template in _REPLAY_EXEMPT
+              else replay_route.build(ext, verdict, student_label="YOUR WORK"))
     replay_block = None
     deeper: list[dict[str, Any]] = []
     if replay["ok"]:
@@ -661,6 +667,8 @@ def _replay_hint(caption: str, eid: Optional[str], ref: str) -> tuple[str, str]:
 class SceneUnavailable(Exception):
     """This template's guards say it cannot tell an honest story about this error."""
 
+
+_REPLAY_EXEMPT = {"CompositionOrderVector"}
 
 _TITLES = {
     "GridTransformCompare": "{ref}, applied to the plane",
@@ -741,6 +749,24 @@ def _grid_order(verdict, ext, env, S, C):
     s_syms = ["A", "B"] if student_first_is_A else ["B", "A"]
     c_syms = list(reversed(s_syms))
     vname = next((n for n in ("v", "x", "u", "w") if _flat(env.get(n))), None)
+    if vname:
+        # The problem hands us an actual vector, so show what happens to THAT
+        # rather than to the standard basis: one arrow, two orders, two places
+        # it lands. Falls through to the grid comparison when there is none.
+        try:
+            return "CompositionOrderVector", {
+                "vector": _flat(env.get(vname)),
+                "vector_name": vname,
+                "student_stages": stages,
+                "correct_stages": other,
+                "student_symbols": s_syms,
+                "correct_symbols": c_syms,
+                "opening": "matrix multiplication transforms the coordinate plane",
+                "skip_prologue": True,
+            }
+        except Exception:  # noqa: BLE001
+            pass
+
     return "GridTransformCompare", {
         "student_stages": stages,
         "correct_stages": other,

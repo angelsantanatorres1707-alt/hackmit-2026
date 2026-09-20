@@ -382,10 +382,10 @@ def play_prologue(scene: Scene, params: dict, *, scene_name: str = "") -> None:
     """
     if (params or {}).get("skip_prologue"):
         return
-    try:
-        play_title(scene)
-    except Exception:
-        return
+    # No title card. It was three seconds of words in front of every single
+    # video, saying nothing the animation does not say better, and the first
+    # thing anyone watching wants is the picture. play_title() is kept for the
+    # standalone renders that still call it directly.
     key = concept_for(scene_name or type(scene).__name__, params)
     if not key:
         return
