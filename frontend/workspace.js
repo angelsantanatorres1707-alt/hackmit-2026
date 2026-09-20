@@ -318,6 +318,7 @@
   function applyJob(job) {
     if (!job) return;
 
+    renderWarnings(job);
     renderSteps(job);
 
     if (job.hint) {
@@ -369,6 +370,32 @@
     var all = s.match(/\b\w*(?:Error|Exception): [^\n;]{3,200}/g);
     if (all && all.length) return all[all.length - 1].trim();
     return s.split('\n')[0].slice(0, 240);
+  }
+
+
+  /* The backend tells us when it handed back a bundled sample instead of the
+     photo that was uploaded. app.js shows that; this page used to drop it on
+     the floor, so someone uploading their own work was shown a stranger's with
+     nothing on screen to say so. That is the one failure extract.py calls the
+     worst thing this app can do quietly. */
+  function renderWarnings(job) {
+    var box = $('#ws-warnings');
+    box.textContent = '';
+
+    var rows = (job.warnings || []).slice();
+    if (job.photo_substituted && !rows.length) {
+      rows.push('Your photo was not read. What follows is a bundled sample, not your work.');
+    }
+    if (!rows.length) { box.hidden = true; return; }
+
+    box.hidden = false;
+    rows.forEach(function (w) {
+      var el = document.createElement('div');
+      // A substitution is not a footnote: it means nothing on screen is theirs.
+      el.className = 'ws-warn' + (job.photo_substituted ? ' is-loud' : '');
+      el.textContent = w;
+      box.appendChild(el);
+    });
   }
 
   function renderSteps(job) {

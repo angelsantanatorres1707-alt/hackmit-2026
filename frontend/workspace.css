@@ -34,6 +34,17 @@
 }
 @media (max-width: 920px) { .ws { grid-template-columns: 1fr; } }
 
+/* The logo plus three nav items do not fit a phone, and .ws-top is a separate
+   header from .topbar so the wrap rule in styles.css never reached it. Left
+   unfixed the page was 426px wide in a 390px viewport, and a browser given a
+   page wider than its viewport scales out to fit -- which is what "the screen
+   zooms out when I type" was: focusing the box made it re-fit the full width. */
+@media (max-width: 720px) {
+  .ws-top { flex-wrap: wrap; justify-content: center; gap: 10px 0; padding: 10px 16px; }
+  .ws-top .navbar { margin-left: 0; width: 100%; justify-content: center; }
+  .ws { padding: 16px; gap: 28px; }
+}
+
 .pane {
   display: flex; flex-direction: column; min-width: 0;
 }
@@ -270,3 +281,17 @@
 
 .mode.listening { background: var(--teal-soft); color: var(--teal-ink); box-shadow: inset 0 0 0 1px var(--teal-line); }
 .mode.listening svg { animation: blip 1.5s ease-in-out infinite; }
+
+/* ── warnings ────────────────────────────────────────────────────────── */
+.ws-warnings { display: flex; flex-direction: column; gap: 9px; }
+.ws-warnings[hidden] { display: none; }
+.ws-warn {
+  padding: 13px 16px; border-radius: 11px; font-size: 1rem; line-height: 1.5;
+  background: rgba(224, 161, 6, 0.10);
+  border: 1px solid rgba(180, 125, 0, 0.35); color: #7A5600;
+}
+.ws-warn.is-loud {
+  font-size: 1.06rem; font-weight: 500;
+  background: rgba(220, 68, 68, 0.09);
+  border: 2px solid rgba(200, 50, 50, 0.55); color: #98222C;
+}
