@@ -309,14 +309,24 @@ def render_with_fallback(plan: dict, *, quality: str = QUALITY, timeout: float =
     ``plan`` is {"template", "params", "fallback": {"template","params"} | None}.
     Never raises: a render problem must never reach the demo as a stack trace.
     """
-    attempts: list[dict[str, Any]] = [{"template": plan["template"], "params": plan["params"]}]
+    plan = plan or {}
+    attempts: list[dict[str, Any]] = [
+        {"template": plan.get("template"), "params": plan.get("params") or {}}
+    ]
     fb = plan.get("fallback")
-    if fb and fb.get("template") != plan["template"]:
-        attempts.append({"template": fb["template"], "params": fb["params"]})
+    if isinstance(fb, dict) and fb.get("template") and fb.get("template") != plan.get("template"):
+        attempts.append({"template": fb["template"], "params": fb.get("params") or {}})
 
     errors: list[str] = []
-    have = set(available_templates())
+    try:
+        have = set(available_templates())
+    except Exception as exc:           # a mid-edit scene file must not stop us
+        errors.append(f"template scan failed: {type(exc).__name__}: {exc}")
+        have = set()
     for attempt in attempts:
+        if not attempt.get("template") or attempt.get("params") is None:
+            errors.append("a fallback plan was incomplete")
+            continue
         if have and attempt["template"] not in have:
             errors.append(f"{attempt['template']}: not implemented yet")
             continue
@@ -328,8 +338,14 @@ def render_with_fallback(plan: dict, *, quality: str = QUALITY, timeout: float =
             return out
         except RenderError as exc:
             errors.append(f"{attempt['template']}: {exc} {exc.detail}".strip())
+        except Exception as exc:
+            # OSError from the cache dir, a JSON that will not serialize, an
+            # unpickleable param -- none of these are RenderError, and all of
+            # them used to come out of here as an exception instead of a step
+            # down the ladder.
+            errors.append(f"{attempt['template']}: {type(exc).__name__}: {exc}")
     return {"ok": False, "video_id": None, "path": None, "errors": errors,
-            "template": plan["template"], "degraded": True}
+            "template": plan.get("template"), "degraded": True}
 
 
 def _tail(text: str, lines: int = 12) -> str:

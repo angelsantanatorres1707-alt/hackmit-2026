@@ -162,7 +162,10 @@ HINTS: dict[str, tuple[str, str]] = {
              "line in {step}.", "watch whether it stays on its line"),
     "LA10": ("The direction you found is right. Watch how far along that line the vector "
              "actually travels in {step}.", "watch how far along the line it stops"),
-    "LA11": ("The circle on screen is every vector of length 1. Watch where your tip lands "
+    # "every vector of length 1" says the same thing but puts a digit in the
+    # hint, which the leak lint then has to reject whenever 1 is an entry of the
+    # correct answer -- costing a good hint to protect a number it never meant.
+    "LA11": ("The circle on screen is every unit vector. Watch where your tip lands "
              "relative to it in {step}.", "watch where your tip lands"),
     "LA12": ("Watch whether your new line still passes through the point where the first two "
              "cross, in {step}.", "watch the point where they cross"),
@@ -187,54 +190,196 @@ GENERIC_BASIS = ("Watch where the {which} basis vector lands in {step}.",
 GENERIC_ANY = ("Watch the left panel against the right one in {step}.",
                "watch the two panels")
 
-BANNED = ("should be", "instead of", "you forgot", "the correct", "actually is",
-          "is wrong because", "the answer is", "you needed to", "you should")
+BANNED = (
+    # stating the correction outright
+    "should be", "should have", "instead of", "rather than", "you forgot",
+    "the correct", "correct value", "correct answer", "right answer",
+    "actually is", "is actually", "in fact it", "is wrong because",
+    "the answer is", "you needed to", "you should", "you meant", "you missed",
+    "ought to be", "needs to be", "has to be", "must be", "was supposed",
+    # imperatives that hand over the fix
+    "change it to", "change the", "replace it", "replace the", "make it",
+    "try", "you want", "the real answer", "the true value",
+)
+
+# Word boundaries, not substrings: a plain `"try " in hint` also fires on
+# "the bottom-left entry is ...", which blocks a perfectly safe positional hint.
+_BANNED_RE = re.compile(
+    "|".join(r"\b" + re.escape(p) + r"\b" for p in BANNED), re.I
+)
 
 _STEP_REF = re.compile(r"\byour step [^\s.,;:!?]+|\bstep \d+\b|\bthis step\b", re.I)
-_NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:\s*/\s*\d+)?")
+
+# Leading digit optional so a bare ".5" is scanned; exponent and fraction tails
+# are both matched so "1e2" and "3 / 4" cannot slip past as "1"/"2" and "3"/"4".
+_NUMBER = re.compile(
+    r"(?<![\w.])(-\s*)?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?%?"
+)
+
+_CARDINAL = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+    "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+    "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20, "thirty": 30,
+    "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
+    "ninety": 90, "hundred": 100,
+}
+_DENOM = {
+    "half": 2, "halves": 2, "third": 3, "thirds": 3, "quarter": 4,
+    "quarters": 4, "fourth": 4, "fourths": 4, "fifth": 5, "fifths": 5,
+    "sixth": 6, "sixths": 6, "eighth": 8, "eighths": 8, "tenth": 10,
+    "tenths": 10,
+}
+_VULGAR = {
+    "½": 0.5, "⅓": 1 / 3, "⅔": 2 / 3, "¼": 0.25,
+    "¾": 0.75, "⅕": 0.2, "⅖": 0.4, "⅗": 0.6, "⅘": 0.8,
+    "⅙": 1 / 6, "⅚": 5 / 6, "⅛": 0.125, "⅜": 0.375,
+    "⅝": 0.625, "⅞": 0.875,
+}
+# A cardinal is a VALUE ("is fourteen", "by ten times") rather than a determiner
+# ("one sideways and one upward", "the first two cross") only in these frames.
+# Without this distinction the bank's own LA16 and LA12 wordings lint as leaks.
+_VALUE_BEFORE = {
+    "is", "are", "was", "were", "be", "equals", "equal", "=", "to", "of", "by",
+    "than", "gives", "give", "becomes", "become", "get", "gets", "got", "it",
+    "negative", "minus", "plus", "times", "over", "about", "around", "exactly",
+    "just", "only", "short", "off",
+}
+_VALUE_AFTER = {"times", "too", "greater", "larger", "smaller", "bigger"}
+_WORDY = re.compile(r"[a-z¼-¾⅐-⅞]+|[¼-¾⅐-⅞]")
 
 
-def lint_hint(hint: str, forbidden_values: list[str], allowed_values: list[str] | None = None) -> list[str]:
+def _word_values(hint: str) -> list[tuple[str, float]]:
+    """Numbers written as words or vulgar fractions, in value position.
+
+    "The bottom-left entry is fourteen" leaks exactly as hard as "... is 14",
+    and the digit scanner sees nothing at all in it.
+    """
+    out: list[tuple[str, float]] = []
+    for ch, val in _VULGAR.items():
+        if ch in hint:
+            out.append((ch, val))
+    toks = re.findall(r"[A-Za-z]+|[=]", hint.lower())
+    for i, tok in enumerate(toks):
+        if tok not in _CARDINAL:
+            continue
+        num = float(_CARDINAL[tok])
+        prev = toks[i - 1] if i else ""
+        nxt = toks[i + 1] if i + 1 < len(toks) else ""
+        if nxt in _DENOM:                       # "one half", "two thirds"
+            out.append((f"{tok} {nxt}", num / _DENOM[nxt]))
+            continue
+        if nxt == "over" and i + 2 < len(toks) and toks[i + 2] in _CARDINAL:
+            out.append((f"{tok} over {toks[i+2]}", num / _CARDINAL[toks[i + 2]]))
+            continue
+        if prev in ("negative", "minus"):
+            out.append((f"{prev} {tok}", -num))
+            continue
+        if prev in _VALUE_BEFORE or nxt in _VALUE_AFTER:
+            out.append((tok, num))
+    return out
+
+
+def _scan_values(hint: str) -> list[tuple[str, float]]:
+    """Every number the hint states, in any notation, as (as-written, value)."""
+    scanned = _STEP_REF.sub(" ", hint)
+    scanned = re.sub(r"(?<=\d),(?=\d)", "", scanned)   # 1,024 -> 1024
+    found: list[tuple[str, float]] = []
+    for m in _NUMBER.finditer(scanned):
+        tok = m.group(0)
+        n = _num(tok)
+        if n is None:
+            continue
+        # "minus 1" / "negative 1" carry the sign the digit scanner cannot see.
+        head = scanned[max(0, m.start() - 12):m.start()].lower()
+        if re.search(r"\b(minus|negative)\s*$", head):
+            n = -n
+        found.append((tok, n))
+    return found + _word_values(scanned)
+
+
+def derived_values(student: list[str], correct: list[str]) -> list[str]:
+    """Differences and ratios between the two answers -- the arithmetic leaks.
+
+    "You are twelve short in the bottom-left" never names 14, but a student who
+    wrote 2 now knows the answer. So does "it is ten times too large". These are
+    the corrections restated, and they belong in the forbidden set.
+    """
+    out: list[str] = []
+    for s_raw, c_raw in zip(student, correct):
+        s, c = _num(s_raw), _num(c_raw)
+        if s is None or c is None:
+            continue
+        diff = c - s
+        if abs(diff) > 1e-9 and abs(diff) < 1e6:
+            out.append(fmt_num(diff))
+        if abs(s) > 1e-9:
+            ratio = c / s
+            if abs(ratio - 1.0) > 1e-9 and abs(ratio) < 1e6:
+                out.append(fmt_num(ratio))
+    return out
+
+
+def lint_hint(
+    hint: str,
+    forbidden_values: list[str],
+    allowed_values: list[str] | None = None,
+) -> list[str]:
     """-> list of problems. Empty means the hint is safe to show a student.
 
     Rejects the banned corrective phrasings, and any number that appears in the
-    correct answer but not in what the student themselves wrote. Step references
-    ("your step 2") are stripped first, so pointing at a line is never a leak.
+    correct answer but not in what the student themselves wrote -- as a digit, a
+    decimal, a fraction, a percentage, a vulgar fraction or an English word.
+    Step references ("your step 2") are stripped first, so pointing at a line is
+    never a leak, and values the student wrote themselves are always allowed:
+    quoting the student back to them tells them nothing new.
     """
     problems: list[str] = []
-    if not hint or not hint.strip():
+    if not isinstance(hint, str) or not hint.strip():
         return ["hint is empty"]
-    low = hint.lower()
-    for phrase in BANNED:
-        if phrase in low:
-            problems.append(f"hint states a correction: {phrase!r}")
+    if not _WORDY.search(hint.lower()):
+        return ["hint has no words in it"]
 
-    scanned = _STEP_REF.sub(" ", hint)
-    allowed_nums = {_num(v) for v in (allowed_values or [])}
-    allowed_nums.discard(None)
-    for tok in _NUMBER.findall(scanned):
-        n = _num(tok)
-        if n is None or n in allowed_nums:
+    for m in dict.fromkeys(m.group(0).lower() for m in _BANNED_RE.finditer(hint)):
+        problems.append(f"hint states a correction: {m!r}")
+
+    allowed_nums = {n for n in (_num(v) for v in (allowed_values or [])) if n is not None}
+    forbidden_nums = [
+        (v, n) for v, n in ((v, _num(v)) for v in forbidden_values) if n is not None
+    ]
+    seen: set[str] = set()
+    for tok, n in _scan_values(hint):
+        if any(abs(a - n) < 1e-9 for a in allowed_nums):
             continue
-        for v in forbidden_values:
-            fv = _num(v)
-            if fv is not None and abs(fv - n) < 1e-9:
-                problems.append(f"hint leaks the value {v!r}")
+        for v, fv in forbidden_nums:
+            if abs(fv - n) < 1e-9 and v not in seen:
+                seen.add(v)
+                problems.append(f"hint leaks the value {v!r} (as {tok!r})")
                 break
     return problems
 
 
 def _num(text: Any) -> Optional[float]:
+    """'14' / '-1' / '1/2' / '0.5' / '50%' / '1e2' / '- 5' -> float, else None."""
     if text is None:
         return None
-    s = str(text).strip()
+    s = str(text).strip().replace(" ", "").replace("−", "-")
+    if not s:
+        return None
+    pct = s.endswith("%")
+    if pct:
+        s = s[:-1]
     try:
         if "/" in s:
             a, b = s.split("/", 1)
-            return float(a) / float(b)
-        return float(s)
-    except Exception:
+            val = float(a) / float(b)
+        else:
+            val = float(s)
+    except (ValueError, ZeroDivisionError, TypeError):
         return None
+    if val != val or val in (float("inf"), float("-inf")):
+        return None
+    return val / 100.0 if pct else val
 
 
 def _forbidden(correct: Optional[Val]) -> list[str]:
@@ -276,7 +421,10 @@ def step_ref(verdict: Verdict) -> str:
     if label:
         clean = label.rstrip(").:").strip()
         clean = re.sub(r"^step\s*", "", clean, flags=re.I)
-        if clean:
+        # The label is transcribed ink, so it can be anything. Anything long or
+        # arithmetic-looking is not a label, and would be pasted straight into
+        # the hint (and past the step-reference strip) if we trusted it.
+        if clean and len(clean) <= 8 and not re.search(r"[=+\-*/\[\]]", clean):
             return f"your step {clean}"
     if verdict.first_error_index is not None:
         return f"your step {verdict.first_error_index + 1}"
@@ -306,9 +454,17 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
     full, short = HINTS.get(eid or "", GENERIC_ANY)
     try:
         template, params = builder(verdict, ext, env, S, C)
-    except SceneUnavailable as exc:
-        notes.append(f"{eid or 'generic'} -> StaticStepHighlight: {exc}")
-        template, params = _static(verdict, ext, env, S, C)
+    except Exception as exc:
+        # SceneUnavailable is the designed way down the ladder, but a builder
+        # that raises anything else must land in the same place: a template that
+        # cannot draw this error is a degraded video, never a failed request.
+        why = str(exc) if isinstance(exc, SceneUnavailable) else f"{type(exc).__name__}: {exc}"
+        notes.append(f"{eid or 'generic'} -> StaticStepHighlight: {why}")
+        try:
+            template, params = _static(verdict, ext, env, S, C)
+        except Exception as exc2:      # the bottom of the ladder has to hold
+            notes.append(f"StaticStepHighlight -> minimal: {type(exc2).__name__}: {exc2}")
+            template, params = _minimal(verdict)
         full, short = HINTS.get(eid or "", GENERIC_ANY)
 
     if eid is None and template == "GridTransformCompare":
@@ -319,13 +475,23 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
     hint = full.format(step=ref)
     short_hint = short.format(step=ref) if "{step}" in short else short
 
-    forbidden = _forbidden(C)
     allowed = _forbidden(S)
-    problems = lint_hint(hint, forbidden, allowed)
+    forbidden = _forbidden(C)
+    # The arithmetic leaks too: "twelve short" and "ten times too large" name the
+    # correction without naming the answer.
+    forbidden = forbidden + derived_values(allowed, forbidden)
+
+    # The short caption is burned into the video frame, so it is every bit as
+    # public as the sentence -- lint both, and fail them together.
+    problems = lint_hint(hint, forbidden, allowed) + lint_hint(short_hint, forbidden, allowed)
     if problems:  # a leaked hint is a product failure: fall back to the safest wording
         notes.extend(problems)
         hint = f"Watch the highlighted part of {ref}."
         short_hint = "watch the highlighted part"
+        if lint_hint(hint, forbidden, allowed):
+            # Only reachable if the step reference itself carries the answer.
+            notes.append("even the positional wording linted; dropping the step reference")
+            hint = "Watch the highlighted part of your work."
 
     params["hint"] = short_hint
     params.setdefault("title", _title(template, ref))
@@ -334,10 +500,15 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
 
     fallback = None
     if template != "StaticStepHighlight":
-        _t, fb_params = _static(verdict, ext, env, S, C)
-        fb_params["hint"] = short_hint
-        fb_params.setdefault("title", params["title"])
-        fallback = {"template": "StaticStepHighlight", "params": fb_params}
+        try:
+            _t, fb_params = _static(verdict, ext, env, S, C)
+        except Exception as exc:
+            notes.append(f"no StaticStepHighlight fallback: {type(exc).__name__}: {exc}")
+            fb_params = None
+        if fb_params is not None:
+            fb_params["hint"] = short_hint
+            fb_params.setdefault("title", params["title"])
+            fallback = {"template": "StaticStepHighlight", "params": fb_params}
 
     return Plan(template, params, hint, forbidden, fallback, notes)
 
@@ -454,14 +625,17 @@ def _determinant(verdict, ext, env, S, C):
     actual = C.obj if C is not None and not C.is_matrix else None
     if claimed is None or actual is None:
         raise SceneUnavailable("the determinant claim is not a single number")
-    if abs(float(sp.N(claimed)) - float(sp.N(actual))) <= 1e-9:
+    claimed_f, actual_f = real(claimed), real(actual)
+    if claimed_f is None or actual_f is None:
+        raise SceneUnavailable("a determinant is not a finite real number")
+    if abs(claimed_f - actual_f) <= 1e-9:
         raise SceneUnavailable("the two determinants agree; there is no story here")
     return "DeterminantAreaCompare", {
         "M": m,
         "M_display": _display(M),
         "claimed_det": fmt_num(claimed),
         "actual_det": fmt_num(actual),
-        "show_ghost_scale": abs(float(sp.N(claimed))) <= 60,
+        "show_ghost_scale": abs(claimed_f) <= 60,
         "student_label": "YOUR ANSWER",
         "correct_label": "AREA ON SCREEN" if len(m) == 2 else "VOLUME ON SCREEN",
     }
@@ -495,16 +669,19 @@ def _eigen_value(verdict, ext, env, S, C):
     correct = _first_scalar(C)
     if claimed is None or correct is None:
         raise SceneUnavailable("no single claimed eigenvalue to draw")
-    if abs(complex(sp.N(claimed)).imag) > 1e-9:
-        # A complex claimed eigenvalue has nothing to draw on a real plane.
-        raise SceneUnavailable("the claimed eigenvalue is complex")
+    claimed_f, correct_f = real(claimed), real(correct)
+    if claimed_f is None:
+        # A complex or symbolic eigenvalue has nothing to draw on a real plane.
+        raise SceneUnavailable("the claimed eigenvalue is not a real number")
+    if correct_f is None:
+        raise SceneUnavailable("the true eigenvalue is not a real number")
     vec = _real_eigenvector(M.obj)
     if vec is None:
         raise SceneUnavailable("no real eigenvector to travel along")
     return "EigenRayTest", {
         "M": m, "M_display": _display(M),
         "v_claimed": vec, "v_correct": vec,
-        "lambda_claimed": float(sp.N(claimed)), "lambda_correct": float(sp.N(correct)),
+        "lambda_claimed": claimed_f, "lambda_correct": correct_f,
         "mode": "eigenvalue",
         "student_label": "YOUR EIGENVALUE", "correct_label": "WHERE IT LANDS",
     }
@@ -523,10 +700,12 @@ def _first_scalar(v: Optional[Val]):
 def _real_eigenvector(M: sp.Matrix) -> Optional[list[float]]:
     try:
         for val, _m, vecs in M.eigenvects():
-            if abs(complex(sp.N(val)).imag) > 1e-9:
+            if real(val) is None:
                 continue
-            v = sp.Matrix(vecs[0])
-            return [float(sp.N(x)) for x in v]
+            out = [real(x) for x in sp.Matrix(vecs[0])]
+            if any(x is None for x in out):
+                continue
+            return out
     except Exception:
         return None
     return None
@@ -620,14 +799,16 @@ def _line_system(verdict, ext, env, S, C):
 def _equations(env: dict[str, Val]) -> list[list[float]]:
     aug = env.get("Aug")
     if aug is not None and aug.is_matrix and aug.obj.cols >= 3:
-        return [[float(sp.N(x)) for x in aug.obj.row(i)][:3] for i in range(aug.obj.rows)]
+        rows = [[real(x) for x in aug.obj.row(i)][:3] for i in range(aug.obj.rows)]
+        return [r for r in rows if len(r) >= 3 and not any(x is None for x in r)]
     A, b = env.get("A"), env.get("b")
     if A is not None and A.is_matrix and b is not None and b.is_matrix and A.obj.cols == 2:
         bv = _col(b.obj)
-        return [
-            [float(sp.N(A.obj[i, 0])), float(sp.N(A.obj[i, 1])), float(sp.N(bv[i]))]
+        rows = [
+            [real(A.obj[i, 0]), real(A.obj[i, 1]), real(bv[i])]
             for i in range(min(A.obj.rows, bv.rows))
         ]
+        return [r for r in rows if not any(x is None for x in r)]
     return []
 
 
@@ -641,7 +822,8 @@ def _span(verdict, ext, env, S, C):
     M = sp.Matrix.hstack(*[sp.Matrix(v) for v in vecs])
     actual = int(M.rank())
     claimed = _first_scalar(S)
-    claimed_dim = int(float(sp.N(claimed))) if claimed is not None and _num(fmt_num(claimed)) is not None else len(vecs)
+    claimed_f = real(claimed) if claimed is not None else None
+    claimed_dim = int(round(claimed_f)) if claimed_f is not None else len(vecs)
     if claimed_dim == actual:
         raise SceneUnavailable("the claimed dimension is the true one; no story")
     probe = _unreachable_probe(M, ambient)
@@ -659,13 +841,17 @@ def _vector_list(env: dict[str, Val]) -> list[list[float]]:
     if V is not None and V.is_matrix:
         M = V.obj
         if V.kind == "vector_list":
-            return [[float(sp.N(x)) for x in M.row(i)] for i in range(M.rows)]
-        return [[float(sp.N(x)) for x in M.col(j)] for j in range(M.cols)]
+            raw = [[real(x) for x in M.row(i)] for i in range(M.rows)]
+        else:
+            raw = [[real(x) for x in M.col(j)] for j in range(M.cols)]
+        return [r for r in raw if r and not any(x is None for x in r)]
     out = []
     for key in ("v1", "v2", "v3", "u", "v", "w"):
         val = env.get(key)
         if val is not None and val.is_matrix and min(val.obj.shape) == 1:
-            out.append([float(sp.N(x)) for x in _col(val.obj)])
+            cand = [real(x) for x in _col(val.obj)]
+            if cand and not any(x is None for x in cand):
+                out.append(cand)
     return out
 
 
@@ -674,8 +860,26 @@ def _unreachable_probe(M: sp.Matrix, ambient: int) -> Optional[list[float]]:
     rank = M.rank()
     for cand in [sp.eye(ambient).col(i) for i in range(ambient)]:
         if sp.Matrix.hstack(M, cand).rank() > rank:
-            return [float(sp.N(x)) for x in cand]
+            out = [real(x) for x in cand]
+            return None if any(x is None for x in out) else out
     return None
+
+
+def _minimal(verdict: Verdict) -> tuple[str, dict[str, Any]]:
+    """The floor. Built from nothing but the step id, so it cannot fail.
+
+    ``_static`` is meant to be the bottom of the ladder, but it still reads the
+    extraction, and anything that reads the extraction can be surprised by it.
+    This one reads nothing.
+    """
+    return "StaticStepHighlight", {
+        "lines": [{"kind": "text", "text": "your work"}],
+        "focus": {"line": 0, "chars": [0, 9]},
+        "annotation": "look again at this step",
+        "pairing": None,
+        "student_label": "WHAT YOU WROTE",
+        "correct_label": "WHAT TO LOOK AT",
+    }
 
 
 def _static(verdict, ext, env, S, C):

@@ -681,8 +681,8 @@ def lattice_weight(cells: float) -> tuple[float, float]:
     dim one. Both still read as a grid; neither reads as a wash.
     """
     c = max(float(cells), 1.0)
-    width = float(np.clip(2.7 - 0.085 * c, 1.15, 2.7))
-    opacity = float(np.clip(1.02 - 0.030 * c, 0.42, 0.95))
+    width = float(np.clip(2.8 - 0.075 * c, 1.5, 2.8))
+    opacity = float(np.clip(1.05 - 0.026 * c, 0.62, 0.95))
     return width, opacity
 
 
@@ -972,9 +972,12 @@ def arrow_at(origin: np.ndarray, vec, color: str, *, unit: float = UNIT,
         n = float(np.linalg.norm(d))
         d = d / n if n > 1e-9 else np.array([1.0, 0.0, 0.0])
         end = origin + 0.06 * d
+    # A heavily zoomed-out panel draws i-hat only ~30px long, and manim's
+    # default ratios then thin it to a hairline. Keep short arrows FAT: they
+    # are the one thing in the frame the student is told to watch.
     return Arrow(origin, end, buff=0, color=color, stroke_width=stroke_width,
-                 max_tip_length_to_length_ratio=0.3,
-                 max_stroke_width_to_length_ratio=11)
+                 max_tip_length_to_length_ratio=0.34,
+                 max_stroke_width_to_length_ratio=18)
 
 
 class VecArrow:

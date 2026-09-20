@@ -368,7 +368,17 @@
       warnings.push('The photo is hard to read — check the numbers below carefully.');
     }
     if (doc.multiple_problems_detected) warnings.push('More than one problem is on this page; only the first was read.');
-    warnBox.hidden = warnings.length === 0;
+    warnBox.hidden = warnings.length === 0 && !job.photo_substituted;
+    // A substitution is not a warning among warnings: the steps on screen are
+    // somebody else's work. Say that first, and loudly.
+    if (job.photo_substituted) {
+      const box = el('div', 'warn-row warn-loud');
+      box.appendChild(el('strong', null, 'This is not your photo.'));
+      box.appendChild(el('span', null,
+        ' The steps below come from a bundled sample. Restart with ' +
+        'scripts/run.sh --live (and ANTHROPIC_API_KEY set) to read real work.'));
+      warnBox.appendChild(box);
+    }
     warnings.forEach((w) => warnBox.appendChild(el('div', 'warn-row', w)));
 
     updateDirty();

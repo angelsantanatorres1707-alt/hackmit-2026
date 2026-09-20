@@ -16,6 +16,7 @@ is what curl and the smoke test use.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 import uuid
@@ -52,6 +53,21 @@ app.add_middleware(
 _RENDER_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="render")
 _JOBS: dict[str, dict[str, Any]] = {}
 _LOCK = threading.Lock()
+
+# Jobs are held so /api/job and /api/video can answer later. Nothing ever
+# removed them, so a long demo session grew the dict forever; 200 is far more
+# than a demo needs and keeps every video that is still on screen reachable.
+MAX_JOBS = int(os.environ.get("MAX_JOBS", "200"))
+
+
+def _evict_old_jobs() -> None:
+    """Caller holds _LOCK. Drops the oldest jobs past the cap."""
+    if len(_JOBS) <= MAX_JOBS:
+        return
+    for jid, _ in sorted(_JOBS.items(), key=lambda kv: kv[1].get("created", 0))[
+        : len(_JOBS) - MAX_JOBS
+    ]:
+        _JOBS.pop(jid, None)
 
 
 # --------------------------------------------------------------------------
@@ -130,10 +146,36 @@ def _givens_view(ext: Extraction) -> list[dict]:
 # The pipeline
 # --------------------------------------------------------------------------
 
+def _empty_verdict() -> verify_mod.Verdict:
+    """A verdict that accuses nobody, for when the checker itself falls over."""
+    return verify_mod.Verdict(first_error_index=None, confidence="low")
+
+
 def analyze_extraction(ext: Extraction, meta: dict, *, wait: bool, quality: Optional[str]) -> dict:
     t0 = time.time()
-    verdict = verify_mod.verify(ext)
-    plan = hints_mod.plan(verdict, ext)
+    crashes: list[str] = []
+
+    # verify and plan are pure functions over student-supplied data, and the
+    # student supplies it by photographing a page. Neither one gets to 500 the
+    # request: a page we cannot check still has to come back as a read-back the
+    # student can look at and correct.
+    try:
+        verdict = verify_mod.verify(ext)
+    except Exception as exc:
+        crashes.append(f"could not check this work ({type(exc).__name__}: {exc})")
+        verdict = _empty_verdict()
+
+    try:
+        plan = hints_mod.plan(verdict, ext)
+    except Exception as exc:
+        crashes.append(f"could not build a hint ({type(exc).__name__}: {exc})")
+        template, params = hints_mod._minimal(verdict)
+        plan = hints_mod.Plan(
+            template=template,
+            params={**params, "hint": "watch the highlighted part",
+                    "title": "Your work"},
+            hint="Watch the highlighted part of your work.",
+        )
     verify_seconds = round(time.time() - t0, 3)
 
     job_id = uuid.uuid4().hex[:12]
@@ -174,15 +216,33 @@ def analyze_extraction(ext: Extraction, meta: dict, *, wait: bool, quality: Opti
         "video_seconds": None,
         "rendered_template": None,
     }
+    # Surfaced as its own field, not just another warning row: showing one
+    # student another student's mistake is the single most misleading thing
+    # this app can do, and it needs to be unmissable on screen.
+    job["photo_substituted"] = bool(meta.get("substituted_for_photo"))
     if meta.get("fell_back_because"):
-        job["warnings"].append(f"used the canned extraction: {meta['fell_back_because']}")
+        job["warnings"].append(meta["fell_back_because"])
+    job["warnings"].extend(crashes)
+    job["degraded"] = bool(crashes)
+
+    # The hint is the product. An empty one is a blank panel on the projector,
+    # so it is replaced here rather than anywhere downstream.
+    if not (job.get("hint") or "").strip():
+        job["hint"] = f"Watch the highlighted part of {hints_mod.step_ref(verdict)}."
+        job["notes"] = list(job.get("notes") or []) + ["hint was empty; used the positional wording"]
 
     with _LOCK:
         _JOBS[job_id] = job
+        _evict_old_jobs()
 
     if verdict.first_error_index is None:
         job["video_status"] = "not_needed"
-        job["hint"] = "Nothing in this work disagrees with the problem as it was read."
+        job["hint"] = (
+            "Could not check this work, so nothing is marked wrong. The read-back "
+            "below is what was seen on the page."
+            if crashes else
+            "Nothing in this work disagrees with the problem as it was read."
+        )
         return job
 
     plan_payload = plan.json()

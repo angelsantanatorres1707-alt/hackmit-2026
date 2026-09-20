@@ -330,6 +330,15 @@ input.cell.invalid { border-color: var(--violet); background: rgba(199, 125, 255
   padding: 13px 17px; border-radius: 11px; font-size: 1rem;
   background: var(--amber-soft); border: 1px solid var(--amber-line); color: var(--amber);
 }
+/* Showing one student another student's work is the worst thing this app can
+   do quietly, so this one is not allowed to look like a footnote. */
+.warn-loud {
+  font-size: 1.12rem; line-height: 1.45;
+  background: rgba(220, 68, 68, .14);
+  border: 2px solid rgba(240, 110, 110, .75);
+  color: #ffd9d9;
+}
+.warn-loud strong { color: #fff; }
 
 /* ── action bar ──────────────────────────────────────────────────────── */
 .action-bar {

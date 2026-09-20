@@ -41,6 +41,7 @@ from helpers import (  # noqa: E402
     J_HAT,
     PROBE,
     STUDENT,
+    MAT_Y,
     Z_CHROME,
     ParamScene,
     SceneParamError,
@@ -211,8 +212,12 @@ class GridTransformCompare(ParamScene):
         for a in l_arrows + r_arrows:
             intro.append(FadeIn(a.mob, scale=0.6))
         if labels and n_stages > 1:
-            caption = label_text(labels[0], font_size=20, color=CORRECT, max_width=2.2)
-            caption.move_to(np.array([0.0, -1.0, 0.0])).set_z_index(Z_CHROME)
+            # Between the panels there is now only ~0.8 of gutter, so the
+            # stage caption goes in the free column between the two matrices
+            # instead of half on top of the right panel.
+            caption = label_text(labels[0], font_size=24, color=CORRECT,
+                                 max_width=4.4, weight="BOLD")
+            caption.move_to(np.array([0.0, MAT_Y, 0.0])).set_z_index(Z_CHROME)
             intro.append(FadeIn(caption))
         self.play(*intro, run_time=1.0)
 
@@ -233,8 +238,8 @@ class GridTransformCompare(ParamScene):
                 self.play(Indicate(lay.borders, color=CORRECT, scale_factor=1.02),
                           run_time=float(p["pause_between_stages"]))
                 if labels and caption is not None:
-                    nxt = label_text(labels[k + 1], font_size=20, color=CORRECT,
-                                     max_width=2.2)
+                    nxt = label_text(labels[k + 1], font_size=24, color=CORRECT,
+                                     max_width=4.4, weight="BOLD")
                     nxt.move_to(caption.get_center()).set_z_index(Z_CHROME)
                     self.play(Transform(caption, nxt), run_time=0.5)
 

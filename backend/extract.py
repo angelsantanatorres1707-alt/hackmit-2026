@@ -52,9 +52,14 @@ def _flag(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in _TRUE
 
 
+def _fixture_flag_set() -> bool:
+    """True when fixture mode was ASKED for, as opposed to fallen back into."""
+    return _flag("USE_FIXTURE") or _flag("EXTRACT_USE_FIXTURE")
+
+
 def use_fixture_mode() -> bool:
     """Fixture mode is on if USE_FIXTURE is set, or if there is no API key."""
-    if _flag("USE_FIXTURE") or _flag("EXTRACT_USE_FIXTURE"):
+    if _fixture_flag_set():
         return True
     if _flag("USE_FIXTURE_OFF"):
         return False
@@ -544,7 +549,16 @@ def _image_blocks(images: list[bytes]) -> tuple[list[dict], list[tuple[int, int]
     sizes: list[tuple[int, int]] = []
     multi = len(images) > 1
     for i, raw in enumerate(images, start=1):
-        data, media_type, size = prepare(raw)
+        try:
+            data, media_type, size = prepare(raw)
+        except Exception as exc:
+            # PIL's own message ("cannot identify image file") reaches the
+            # student as a stack trace and tells them nothing to do about it.
+            raise ExtractionError(
+                f"could not read image {i} of {len(images)} - it is not a photo we "
+                f"can open (JPEG, PNG and HEIC all work). Try taking the picture "
+                f"again. [{type(exc).__name__}: {exc}]"
+            ) from exc
         sizes.append(size)
         if multi:
             content.append({"type": "text", "text": f"Image {i}:"})
@@ -566,7 +580,18 @@ def _call_api(images: list[bytes]) -> tuple[Extraction, dict[str, Any]]:
     try:
         import anthropic
     except ImportError as exc:  # pragma: no cover
-        raise ExtractionError("the anthropic SDK is not installed") from exc
+        raise ExtractionError(
+            "the anthropic SDK is not installed - run: bash scripts/setup.sh"
+        ) from exc
+
+    if not have_api_key():
+        # Without this the SDK raises "Could not resolve authentication method",
+        # which names neither the variable nor the fix.
+        raise ExtractionError(
+            "ANTHROPIC_API_KEY is not set, so photographs cannot be read. Either "
+            "export ANTHROPIC_API_KEY=sk-ant-... and restart, or run in fixture "
+            "mode (USE_FIXTURE=1, which is what scripts/run.sh does by default)."
+        )
 
     content, _sizes = _image_blocks(images)
     client = anthropic.Anthropic()
@@ -670,6 +695,29 @@ def extract(
             "seconds": round(time.time() - started, 3),
             "notes": audit(ext),
         }
+        # Someone photographed real work and we are about to hand back a canned
+        # sample of somebody else's. That silently showed the wrong student the
+        # wrong mistake, with nothing on screen to say so. Say so.
+        # Warn whenever a photo came in and a canned sample goes out, whatever the
+        # reason. Suppressing this when USE_FIXTURE was set deliberately covered
+        # the most confusing case of all: scripts/run.sh sets USE_FIXTURE=1 by
+        # default, so someone photographing a projection problem was shown a
+        # matrix-multiply sample with nothing to say it was not their work.
+        if images and not fixture:
+            meta["substituted_for_photo"] = True
+            if not have_api_key():
+                meta["no_api_key"] = True
+                meta["fell_back_because"] = (
+                    f"Your photo was NOT read. This is the bundled sample '{name}'. "
+                    "ANTHROPIC_API_KEY is not set: export it and restart with "
+                    "scripts/run.sh --live to analyse real photographs."
+                )
+            else:
+                meta["fell_back_because"] = (
+                    f"Your photo was NOT read. This is the bundled sample '{name}'. "
+                    "The server is in fixture mode; restart with "
+                    "scripts/run.sh --live to analyse real photographs."
+                )
         return ext, meta
 
     try:
