@@ -4,9 +4,11 @@
  * problems in the store, so step 2 can ask which one is the sticking point and
  * take the student's work for it.
  *
- * A problem is {id, kind:'image'|'text', title, text, file, multi}. `multi` is
- * the student saying a page holds more than one problem -- we cannot split a
- * page apart, so we record the claim and let step 2 ask.
+ * A problem is {id, kind:'image'|'text', title, text, file, multi}. `multi`
+ * was a checkbox asking whether a page held more than one problem; the box is
+ * gone and nothing sets it now, so it persists as false. The field stays in
+ * the shape because step 2 still reads it -- with it false, a lone problem is
+ * auto-selected there instead of being offered as a choice of one.
  */
 (function (global) {
   'use strict';
@@ -15,6 +17,11 @@
   var Store = global.NoemaStore;
   var items = [];
   var seq = 0;
+
+  /* Landing on step 1 is starting over, whichever screen you came from: the
+     list opens empty and the store is emptied with it, so nothing from the
+     last problem carries into the next one. */
+  var cleared = Store ? Store.clear().catch(function () {}) : Promise.resolve();
 
   /* ── toast ─────────────────────────────────────────────────────────── */
   var toastTimer = null;
@@ -41,12 +48,19 @@
     persist();
   }
 
+  /* Every write waits on the opening wipe. Both are their own IndexedDB
+     transaction and each does its own open(), so their order is decided by
+     which open() resolves first -- not by which was called first. A paste
+     landing in the first moments of the page could otherwise be saved and
+     then wiped, losing an upload with no error anywhere. */
   function persist() {
     if (!Store) return;
-    Store.saveProblems(items.map(function (p) {
+    var snapshot = items.map(function (p) {
       return { id: p.id, kind: p.kind, title: p.title, text: p.text || null,
                file: p.file || null, multi: !!p.multi };
-    })).catch(function () { toast('Could not save these locally; they will not carry to the next step.'); });
+    });
+    cleared.then(function () { return Store.saveProblems(snapshot); })
+           .catch(function () { toast('Could not save these locally; they will not carry to the next step.'); });
   }
 
   function render() {
@@ -83,19 +97,8 @@
         ? p.text.slice(0, 120) + (p.text.length > 120 ? '…' : '')
         : (p.file.name || 'photo');
 
-      // We cannot split a page into separate problems, so ask rather than guess.
-      var lab = document.createElement('label');
-      lab.className = 'prob-multi';
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = !!p.multi;
-      cb.addEventListener('change', function () { p.multi = cb.checked; persist(); });
-      lab.appendChild(cb);
-      lab.appendChild(document.createTextNode(' This holds more than one problem'));
-
       body.appendChild(h);
       body.appendChild(sub);
-      body.appendChild(lab);
 
       var x = document.createElement('button');
       x.type = 'button';
@@ -309,16 +312,5 @@
   wireCamera();
   wireNext();
 
-  // Anything added earlier in this session comes back, so a step back does not
-  // lose the upload.
-  if (Store) {
-    Store.loadProblems().then(function (saved) {
-      if (!saved.length) return render();
-      items = saved.filter(function (p) { return p.kind === 'text' || p.file; });
-      seq = items.length;
-      render();
-    });
-  } else {
-    render();
-  }
+  render();
 })(window);
