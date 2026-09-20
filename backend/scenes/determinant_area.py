@@ -65,8 +65,11 @@ from helpers import (  # noqa: E402
     iso_project,
     label_text,
     live_text,
+    MASK,
+    MASK_COLOR,
     one_panel_layout,
     parse_num,
+    reveal_correct_values,
     scoreboard,
     signed_area,
 )
@@ -87,7 +90,9 @@ class DeterminantAreaCompare(ParamScene):
         "actual_det": None,
         "show_ghost_scale": True,
         "title": "What your matrix does to one unit of area",
-        "hint": "watch the counter as the square lands",
+        # The counter no longer prints det(M) -- the grey tiles are the
+        # comparison now, so the hint points at them.
+        "hint": "compare the landed square with the grey tiles",
     }
 
     # ------------------------------------------------------------------
@@ -146,21 +151,31 @@ class DeterminantAreaCompare(ParamScene):
                                dx=PLANE_DX, dy=-0.7, box=PLANE_BOX, unit=unit)
         P = lay.left
 
+        # The live counter ticks to det(M), which IS the answer, so it is only
+        # drawn when the reveal flag is on. Hidden, the row keeps its label
+        # and shows a grey "?": the student compares the landed square with
+        # the grey tiles that spell out their own claimed area.
+        #
         # The readout is SIGNED, not absolute. For LA06 the claim and |det|
         # agree in magnitude and differ only in sign, so an abs() readout
         # would show the student's number as correct while the picture says
-        # otherwise -- the worst possible mixed message.
+        # otherwise -- the worst possible mixed message. The word "SIGNED" in
+        # the label is itself a tell, so it only appears alongside the number.
+        reveal = reveal_correct_values()
         flips = p["actual_value"] < 0
+        area_label = "SIGNED AREA ON SCREEN" if (flips and reveal) \
+            else "AREA ON SCREEN"
         board = scoreboard(
             [("YOUR ANSWER", p["claimed_det"], STUDENT),
-             ("SIGNED AREA ON SCREEN" if flips else "AREA ON SCREEN",
-              "0.00", CORRECT)],
+             (area_label, "0.00" if reveal else MASK,
+              CORRECT if reveal else MASK_COLOR)],
             anchor=np.array([BOARD_X, 0.15, 0.0]))
         live_anchor = board[1][1].get_left()
-        board[1].remove(board[1][1])   # NB: must remove from the ROW, not the
-        # board -- VGroup.remove only searches direct submobjects, so removing
-        # a grandchild from the parent silently does nothing and the static
-        # placeholder ends up drawn underneath the live readout.
+        if reveal:
+            board[1].remove(board[1][1])   # NB: must remove from the ROW, not
+            # the board -- VGroup.remove only searches direct submobjects, so
+            # removing a grandchild from the parent silently does nothing and
+            # the static placeholder ends up drawn underneath the live readout.
 
         m_disp = TextMatrix(p["M_display"], color=CORRECT, font_size=26)
         m_disp.move_to(np.array([BOARD_X + 0.3, 2.35, 0.0])).set_z_index(Z_CHROME)
@@ -183,11 +198,13 @@ class DeterminantAreaCompare(ParamScene):
 
         readout = live_text(lambda: f"{signed_area(sq, P.unit):.2f}",
                             at=live_anchor, font_size=34, color=CORRECT,
-                            aligned_edge=np.array([-1.0, 0.0, 0.0]))
+                            aligned_edge=np.array([-1.0, 0.0, 0.0])) \
+            if reveal else None
 
         # -- 0.0 / 1.2 --------------------------------------------------
         self.play(Create(P.plane), FadeIn(lay.title), FadeIn(board), run_time=1.2)
-        self.add(readout)
+        if readout is not None:
+            self.add(readout)
         # -- 1.2 / 0.8 --------------------------------------------------
         self.play(FadeIn(sq), FadeIn(i_hat.mob, scale=0.6),
                   FadeIn(j_hat.mob, scale=0.6), FadeIn(m_disp), run_time=0.8)
@@ -202,13 +219,20 @@ class DeterminantAreaCompare(ParamScene):
         recolor(sq)
 
         # -- 5.9 / 0.6  lock the readout --------------------------------
-        final = signed_area(sq, P.unit)
-        locked = T(f"{final:.2f}", font_size=34, color=CORRECT)
-        locked.move_to(live_anchor, aligned_edge=np.array([-1.0, 0.0, 0.0]))
-        locked.set_z_index(Z_CHROME)
-        self.remove(readout)
-        self.add(locked)
-        flash = [Flash(locked, color=CORRECT, line_length=0.16, flash_radius=0.55)]
+        if reveal:
+            final = signed_area(sq, P.unit)
+            locked = T(f"{final:.2f}", font_size=34, color=CORRECT)
+            locked.move_to(live_anchor, aligned_edge=np.array([-1.0, 0.0, 0.0]))
+            locked.set_z_index(Z_CHROME)
+            self.remove(readout)
+            self.add(locked)
+            flash = [Flash(locked, color=CORRECT, line_length=0.16,
+                           flash_radius=0.55)]
+        else:
+            # Nothing numeric to land on, so the beat lands on the square
+            # itself -- which is the thing the student has to read.
+            flash = [Flash(sq.get_center_of_mass(), color=CORRECT,
+                           line_length=0.16, flash_radius=0.55)]
         if flips:
             turned = label_text("the sheet turned over", font_size=20,
                                 color=PROBE, max_width=4.6)
@@ -263,12 +287,16 @@ class DeterminantAreaCompare(ParamScene):
         P = lay.left
         self.remove(P.plane)  # a square grid under an iso solid reads wrong
 
+        # Same rule as the 2x2 path: the counter ends at |det(M)|, the answer.
+        reveal = reveal_correct_values()
         board = scoreboard(
             [("YOUR ANSWER", p["claimed_det"], STUDENT),
-             ("VOLUME ON SCREEN", "1.00", CORRECT)],
+             ("VOLUME ON SCREEN", "1.00" if reveal else MASK,
+              CORRECT if reveal else MASK_COLOR)],
             anchor=np.array([BOARD_X, 0.15, 0.0]))
         live_anchor = board[1][1].get_left()
-        board[1].remove(board[1][1])
+        if reveal:
+            board[1].remove(board[1][1])
 
         m_disp = TextMatrix(p["M_display"], color=CORRECT, font_size=22)
         m_disp.move_to(np.array([BOARD_X + 0.3, 2.3, 0.0])).set_z_index(Z_CHROME)
@@ -296,7 +324,8 @@ class DeterminantAreaCompare(ParamScene):
         body = always_redraw(solid)
         readout = live_text(lambda: f"{abs(np.linalg.det(M_t())):.2f}",
                             at=live_anchor, font_size=34, color=CORRECT,
-                            aligned_edge=np.array([-1.0, 0.0, 0.0]))
+                            aligned_edge=np.array([-1.0, 0.0, 0.0])) \
+            if reveal else None
 
         axes = VGroup(*[
             Line(P.origin, P.origin + P.unit * 1.6 * iso_project(e),
@@ -305,7 +334,9 @@ class DeterminantAreaCompare(ParamScene):
         axes.set_z_index(Z_OVERLAY - 4)
 
         self.play(FadeIn(lay.title), FadeIn(board), Create(axes), run_time=1.2)
-        self.add(body, readout)
+        self.add(body)
+        if readout is not None:
+            self.add(readout)
         self.play(FadeIn(m_disp), run_time=0.8)
         self.wait(0.4)
         # A 3x3 cannot go through ApplyMatrix (it acts on scene coordinates),
@@ -313,14 +344,18 @@ class DeterminantAreaCompare(ParamScene):
         self.play(t.animate.set_value(1.0), run_time=3.5)
         self.wait(0.3)
 
-        final = float(np.linalg.det(M))
-        locked = T(f"{abs(final):.2f}", font_size=34, color=CORRECT)
-        locked.move_to(live_anchor, aligned_edge=np.array([-1.0, 0.0, 0.0]))
-        locked.set_z_index(Z_CHROME)
-        self.remove(readout)
-        self.add(locked)
-        self.play(Flash(locked, color=CORRECT, line_length=0.16,
-                        flash_radius=0.55), run_time=0.6)
+        if reveal:
+            final = float(np.linalg.det(M))
+            locked = T(f"{abs(final):.2f}", font_size=34, color=CORRECT)
+            locked.move_to(live_anchor, aligned_edge=np.array([-1.0, 0.0, 0.0]))
+            locked.set_z_index(Z_CHROME)
+            self.remove(readout)
+            self.add(locked)
+            self.play(Flash(locked, color=CORRECT, line_length=0.16,
+                            flash_radius=0.55), run_time=0.6)
+        else:
+            self.play(Flash(P.origin, color=CORRECT, line_length=0.16,
+                            flash_radius=0.55), run_time=0.6)
 
         cap = label_text(
             f"your answer asks for {fmt_num(abs(claimed))} times this volume",

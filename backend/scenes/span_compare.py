@@ -57,8 +57,11 @@ from helpers import (  # noqa: E402
     fit_unit,
     iso_project,
     label_text,
+    MASK,
+    MASK_COLOR,
     one_panel_layout,
     residual,
+    reveal_correct_values,
     scoreboard,
 )
 
@@ -71,6 +74,19 @@ DOT_COLORS = (I_HAT, J_HAT, PROBE)
 def _dim_word(d: int) -> str:
     return {0: "a point", 1: "a line", 2: "a plane", 3: "all of space"}.get(
         int(d), f"dimension {int(d)}")
+
+
+def _reached_row(actual_dim: int) -> tuple:
+    """The "REACHED" scoreboard row.
+
+    The dimension actually spanned IS the answer, in words instead of digits
+    -- "a line" tells a student who claimed "a plane" exactly what to write.
+    So it is masked unless REVEAL_CORRECT_VALUES is on; the dots that did or
+    did not flood the plane are what the student reads instead.
+    """
+    if reveal_correct_values():
+        return ("REACHED", _dim_word(actual_dim), CORRECT)
+    return ("REACHED", MASK, MASK_COLOR)
 
 
 class SpanCompare(ParamScene):
@@ -243,7 +259,7 @@ class SpanCompare(ParamScene):
         # -- 8.5 / 0.5  the scoreboard resolves -------------------------
         resolved = scoreboard(
             [("YOUR CLAIM", _dim_word(p["claimed_dim"]), STUDENT),
-             ("REACHED", _dim_word(p["actual_dim"]), CORRECT)],
+             _reached_row(p["actual_dim"])],
             anchor=np.array([BOARD_X, 0.6, 0.0]), label_size=19, value_size=30)
         self.play(Transform(board, resolved), run_time=0.6)
 
@@ -323,7 +339,7 @@ class SpanCompare(ParamScene):
 
         resolved = scoreboard(
             [("YOUR CLAIM", _dim_word(p["claimed_dim"]), STUDENT),
-             ("REACHED", _dim_word(p["actual_dim"]), CORRECT)],
+             _reached_row(p["actual_dim"])],
             anchor=np.array([BOARD_X, 0.6, 0.0]), label_size=19, value_size=30)
         self.play(Transform(board, resolved), run_time=0.6)
         self.play(Write(lay.hint), run_time=1.0)

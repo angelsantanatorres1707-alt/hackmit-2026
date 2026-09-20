@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import sys
 from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Iterable, Sequence
@@ -110,6 +111,115 @@ MAX_HINT_W = 12.0
 class SceneParamError(Exception):
     """Raised by ``validate`` -- the backend catches it and degrades down the
     fallback ladder: chosen template -> StaticStepHighlight -> PNG + text."""
+
+
+# ---------------------------------------------------------------------------
+# Answer hiding -- the product promise, enforced in one place
+#
+# The whole premise is that the student SEES the divergence and works out the
+# fix themselves. So the reference side of every template shows its GEOMETRY
+# (transformed grid, basis vectors, unit square, eigenray, span, hinge) and
+# never the numbers that CONSTITUTE the answer:
+#
+#   the correct matrix, det(M), the true eigenvalue, the solution
+#   coordinates, the true span dimension, a projection's components, an
+#   invariant readout computed for the correct object.
+#
+# Numbers that are NOT the answer stay on screen, always:
+#   * the problem's own given matrix (``M_display``, the student's lines),
+#   * everything the student themselves claimed -- that is their work.
+#
+# The flag lives here and is re-exported by ``common.py`` (one module, two
+# names), so ``from common import REVEAL_CORRECT_VALUES`` works too.
+# Flip it to True -- or export ``REVEAL_CORRECT_VALUES=1`` -- to put the
+# numbers back for debugging or a future "show me the answer" escalation.
+#
+# THE DEFAULT MUST STAY False. It is the product, not a style choice.
+# ---------------------------------------------------------------------------
+REVEAL_CORRECT_VALUES = False
+
+MASK = "?"                 # what a withheld number is drawn as
+MASK_COLOR = GHOST         # grey: "deliberately not shown", not "missing"
+
+_TRUTHY = ("1", "true", "yes", "on")
+
+
+def reveal_correct_values() -> bool:
+    """The single gate every template asks before drawing a correct value.
+
+    Priority: ``$REVEAL_CORRECT_VALUES`` (so the flag can be flipped for one
+    render without touching code), then this module's flag, then a runtime
+    override on the ``common`` alias module.
+    """
+    env = os.environ.get("REVEAL_CORRECT_VALUES")
+    if env is not None and env.strip():
+        return env.strip().lower() in _TRUTHY
+    if REVEAL_CORRECT_VALUES:
+        return True
+    common = sys.modules.get("common")
+    return bool(common is not None
+                and getattr(common, "REVEAL_CORRECT_VALUES", False))
+
+
+def mask_rows(rows) -> list[list[str]]:
+    """Same SHAPE as ``rows``, every entry replaced by the mask glyph.
+
+    Keeping the shape matters: "the target is a 2x2 you have not worked out
+    yet" is information the student is entitled to, the entries are not.
+    """
+    out: list[list[str]] = []
+    for row in (rows or [[""]]):
+        cells = row if isinstance(row, (list, tuple)) else [row]
+        out.append([MASK for _ in cells] or [MASK])
+    return out or [[MASK]]
+
+
+def reference_value(value: Any) -> tuple[str, str]:
+    """``(text, color)`` for a number belonging to the correct answer."""
+    if reveal_correct_values():
+        return str(value), CORRECT
+    return MASK, MASK_COLOR
+
+
+# Phrasings that turn a panel heading into an answer key. The planner is an
+# LLM and its first instinct is literally "WHAT THE STEP SHOULD DO", so this
+# is checked at render time and not merely fixed in the DEFAULTS.
+ANSWER_KEY_LABEL_WORDS = (
+    "correct", "should", "right answer", "the answer", "actual",
+    "true ", "truth", "wrong", "answer key", "fix",
+)
+
+REFERENCE_LABEL_DEFAULT = "WHAT THE PROBLEM ASKS FOR"
+
+
+def reference_label(label: Any,
+                    default: str = REFERENCE_LABEL_DEFAULT) -> str:
+    """Heading for the non-student panel: the TARGET, never the correction.
+
+    "WHAT YOU WROTE" stays on the student's side; this side has to read as
+    the goal the student is aiming at, so that the comparison is an
+    invitation rather than a solution.
+    """
+    s = str(label or "").strip()
+    if not s:
+        return default
+    low = s.lower()
+    if any(w in low for w in ANSWER_KEY_LABEL_WORDS):
+        return default
+    return s
+
+
+def is_student_row(label: Any, index: int = 1) -> bool:
+    """Is this scoreboard row the student's own claim (so: safe to show)?
+
+    Row 0 is the student's by construction in every template that has a
+    scoreboard; after that the wording decides, because a template like the
+    cross product puts two student readouts above one reference readout.
+    """
+    if index == 0:
+        return True
+    low = str(label or "").lower()
+    return "your" in low or "you " in low
 
 
 # ---------------------------------------------------------------------------
@@ -469,6 +579,11 @@ def two_panel_layout(scene: Scene, *, title: str, student_label: str,
     Adds the matte and the borders to the scene (they must be present from
     frame 0). Everything else is returned for the template to animate in. The
     hint is created but NOT added -- templates ``Write`` it in the last beat.
+
+    ``correct_rows`` is the ANSWER, so it is masked here rather than in each
+    template: whatever the planner sends, the reference panel cannot print
+    the numbers. ``student_rows`` is the student's own work and is always
+    shown. See ``reveal_correct_values``.
     """
     L = panel(-dx, unit=unit, dy=dy, box=box)
     R = panel(+dx, unit=unit, dy=dy, box=box)
@@ -483,18 +598,24 @@ def two_panel_layout(scene: Scene, *, title: str, student_label: str,
     title_m.move_to(np.array([0.0, TITLE_Y, 0.0]))
     l_head = label_text(student_label, font_size=22, color=STUDENT, max_width=5.4)
     l_head.move_to(np.array([-dx, HEAD_Y, 0.0]))
-    r_head = label_text(correct_label, font_size=22, color=CORRECT, max_width=5.4)
+    r_head = label_text(reference_label(correct_label), font_size=22,
+                        color=CORRECT, max_width=5.4)
     r_head.move_to(np.array([dx, HEAD_Y, 0.0]))
 
     l_mat = r_mat = center_mat = None
     if center_rows is not None:
+        # The GIVEN matrix, not an answer: the student is allowed to read it.
         center_mat = TextMatrix(center_rows, color=CORRECT, font_size=26)
         center_mat.move_to(np.array([0.0, MAT_Y + 0.55, 0.0]))
     if student_rows is not None:
         l_mat = TextMatrix(student_rows, color=STUDENT, font_size=26)
         l_mat.move_to(np.array([-dx, MAT_Y, 0.0]))
     if correct_rows is not None:
-        r_mat = TextMatrix(correct_rows, color=CORRECT, font_size=26)
+        if reveal_correct_values():
+            r_mat = TextMatrix(correct_rows, color=CORRECT, font_size=26)
+        else:
+            r_mat = TextMatrix(mask_rows(correct_rows), color=MASK_COLOR,
+                               font_size=26)
         r_mat.move_to(np.array([dx, MAT_Y, 0.0]))
 
     hint_m = label_text(hint, font_size=24, color=STUDENT, max_width=MAX_HINT_W)

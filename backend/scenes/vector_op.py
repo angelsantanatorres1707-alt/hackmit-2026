@@ -57,8 +57,12 @@ from helpers import (  # noqa: E402
     fit_unit,
     fmt_num,
     iso_project,
+    is_student_row,
     label_text,
+    MASK,
+    MASK_COLOR,
     residual,
+    reveal_correct_values,
     right_angle_marker,
     scoreboard,
     side_label,
@@ -82,8 +86,10 @@ class VectorOpCompare(ParamScene):
         "w_claimed": [8.94, 4.47],
         "w_correct": [4, 2],
         "labels": {"u": "u", "v": "v"},
+        # Row 0 is the student's. The reference row is masked at render
+        # time -- it names the property, the student supplies the number.
         "readouts": [["your residual . v", "-12.36"],
-                     ["correct residual . v", "0.00"]],
+                     ["a projection's residual . v", "0.00"]],
         "title": "Your projection, drawn on the same axes",
         "hint": "watch whether the corner marker closes",
     }
@@ -340,13 +346,29 @@ class VectorOpCompare(ParamScene):
 
     # ------------------------------------------------------------------
     def _readouts(self, p: dict) -> None:
+        """The scoreboard beside the plane.
+
+        The student's own numbers are always shown -- that is their work.
+        The reference rows ("what a projection's residual does", "what a
+        normal's dot product is") are the value the student has to supply,
+        so they are masked to a grey "?" unless REVEAL_CORRECT_VALUES is on.
+        Row 0 is the student's by construction; past that the wording
+        decides, because the cross product puts TWO student readouts above
+        one reference readout.
+        """
         rows = p.get("readouts") or []
         if not rows:
             self.wait(1.2)
             return
+        reveal = reveal_correct_values()
         colored = []
         for k, (lab, val) in enumerate(rows):
-            colored.append((lab, val, STUDENT if k == 0 else CORRECT))
+            if is_student_row(lab, k):
+                colored.append((lab, val, STUDENT))
+            elif reveal:
+                colored.append((lab, val, CORRECT))
+            else:
+                colored.append((lab, MASK, MASK_COLOR))
         board = scoreboard(colored, anchor=np.array([BOARD_X, 0.3, 0.0]),
                            label_size=18, value_size=30, max_width=4.4)
         self.play(FadeIn(board), run_time=1.2)
@@ -365,7 +387,7 @@ class VectorOpNormalize(VectorOpCompare):
         w_claimed=[0.428, 0.571],
         w_correct=[0.6, 0.8],
         labels={"u": "v", "v": ""},
-        readouts=[["your length", "0.71"], ["length of a unit vector", "1.00"]],
+        readouts=[["your length", "0.71"], ["a unit vector's length", "1.00"]],
         title="Your unit vector against the unit circle",
         hint="watch where each tip lands relative to the circle",
     )
@@ -383,7 +405,7 @@ class VectorOpCross(VectorOpCompare):
         w_claimed=[1, 2, 6],      # the dropped j-sign
         w_correct=[1, -2, 6],     # u x v
         labels={"u": "u", "v": "v"},
-        readouts=[["your answer . u", "4"], ["a normal . u", "0"]],
+        readouts=[["your answer . u", "4"], ["a normal's dot with u", "0"]],
         title="Your cross product against the sheet it should stand out of",
         hint="watch whether the arrow leans into the sheet",
     )

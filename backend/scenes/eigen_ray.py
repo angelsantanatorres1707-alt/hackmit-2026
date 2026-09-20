@@ -61,7 +61,9 @@ class EigenRayTest(ParamScene):
         "mode": "vector",
         "title": "Your vector under the same matrix",
         "student_label": "YOUR VECTOR",
-        "correct_label": "AN EIGENVECTOR",
+        # The goal, not the answer key: the panel shows what staying on the
+        # line LOOKS like. No numbers are printed on this side.
+        "correct_label": "WHAT AN EIGENVECTOR DOES",
         "hint": "watch whether each arrow stays on its own dashed line",
     }
 
@@ -240,6 +242,6 @@ class EigenRayTestEigenvalue(EigenRayTest):
         lambda_correct=3,
         title="How far your eigenvalue would stretch this vector",
         student_label="YOUR STRETCH",
-        correct_label="THE VECTOR ITSELF",
+        correct_label="WHERE THE VECTOR LANDS",
         hint="compare the two arrow tips on the left ray",
     )

@@ -69,7 +69,10 @@ class GridTransformCompare(ParamScene):
         "stage_labels": None,
         "title": "Your step 3, applied to the plane",
         "student_label": "WHAT YOU WROTE",
-        "correct_label": "WHAT THE STEP SHOULD DO",
+        # NOT "WHAT THE STEP SHOULD DO": that heading plus the numbers under
+        # it was an answer key. The right panel shows the target GEOMETRY and
+        # a masked matrix -- see two_panel_layout / reveal_correct_values.
+        "correct_label": "WHAT THE PROBLEM ASKS FOR",
         "hint": "watch the second basis vector in your step 3",
         "ghost_reference": False,
         "pause_between_stages": 0.8,
@@ -116,6 +119,9 @@ class GridTransformCompare(ParamScene):
         p["student_stages"] = [S.tolist() for S in stages_s]
         p["correct_stages"] = [S.tolist() for S in stages_c]
         p["student_display"] = p.get("student_display") or fmt_rows(product(stages_s))
+        # Still computed: it is the ban list for check_hint below. It is NOT
+        # drawn -- two_panel_layout masks the reference matrix unless
+        # REVEAL_CORRECT_VALUES is on.
         p["correct_display"] = p.get("correct_display") or fmt_rows(product(stages_c))
 
         tracks = p.get("track_vectors") or [[1, 0], [0, 1]]
