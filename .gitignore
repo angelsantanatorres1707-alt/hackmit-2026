@@ -12,3 +12,6 @@ renders/
 !.env.example
 *.key
 secrets.json
+
+# Captured render templates: regenerated from use, not source.
+generated_templates/

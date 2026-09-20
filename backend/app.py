@@ -327,6 +327,23 @@ def _do_render(job_id: str, plan_payload: dict, quality: Optional[str]) -> None:
         job["video_degraded"] = bool(result.get("degraded"))
         if result.get("errors"):
             job["notes"] = list(job.get("notes") or []) + result["errors"]
+        # File the parameter set as a reusable template. The numbers ARE the
+        # parameters, so this is the same film waiting for different ones --
+        # not a recording of this one. Best-effort by construction.
+        try:
+            from . import template_store
+
+            template_store.record(
+                template=result.get("template") or plan_payload.get("template", ""),
+                params=(result.get("params") or plan_payload.get("params") or {}),
+                error_id=job.get("error_id"),
+                topic=(job.get("problem") or {}).get("topic", ""),
+                asks_for=(job.get("problem") or {}).get("asks_for", ""),
+                video_seconds=result.get("seconds"),
+                digest=job.get("digest") or "",
+            )
+        except Exception:  # noqa: BLE001
+            pass
     else:
         job["video_status"] = "failed"
         job["video_error"] = "; ".join(result.get("errors") or ["render failed"])
@@ -495,6 +512,21 @@ def get_video(video_id: str):
     if direct:
         return FileResponse(str(direct), media_type="video/mp4", filename=f"{video_id}.mp4")
     raise HTTPException(status_code=404, detail="no such video")
+
+
+@app.get("/api/templates")
+def templates() -> JSONResponse:
+    """Every template captured from a real render, newest variant first.
+
+    A variant is a parameter set that produced a video. Swap its numbers and
+    render the same template again to get the same film about another problem.
+    """
+    from . import template_store
+
+    return JSONResponse({
+        "directory": str(template_store.directory()),
+        "templates": template_store.catalogue(),
+    })
 
 
 @app.get("/api/fixtures")
