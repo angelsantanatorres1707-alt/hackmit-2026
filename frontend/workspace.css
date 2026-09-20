@@ -37,19 +37,7 @@
 .pane {
   display: flex; flex-direction: column; min-width: 0;
 }
-.pane-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  padding: 0 0 12px; border-bottom: 1px solid var(--line-soft);
-}
-.pane-title {
-  font-size: 1.14rem; color: var(--text); font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.pane-stat {
-  font-size: 0.8rem; font-weight: 500; letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--dim); white-space: nowrap;
-}
-.pane-body { padding: 18px 0 0; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pane-body { padding: 0; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
 /* ── dropzone ────────────────────────────────────────────────────────── */
 .ws-drop {
@@ -143,7 +131,8 @@
 #ws-prompt::placeholder { color: var(--dim); }
 
 .composer-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; }
-.composer-note { color: var(--dim); font-size: 0.9rem; }
+.composer-note { color: var(--dim); font-size: 0.9rem; max-width: 46ch; line-height: 1.45; }
+.composer-note.is-warn { color: #7A5600; font-weight: 500; }
 .ws-run {
   display: inline-flex; align-items: center; gap: 10px;
   padding: 12px 22px; border: none; border-radius: 999px; cursor: pointer;

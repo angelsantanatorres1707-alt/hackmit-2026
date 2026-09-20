@@ -168,8 +168,28 @@
   }
 
 
+  var NOTE_DEFAULT = 'Analysed step by step \u2014 never auto-graded';
+
+  // A greyed-out button with no reason beside it reads as broken. Typed text
+  // alone cannot be analysed: extract.py takes image bytes, and with none it
+  // falls through to a bundled sample of somebody else's work. So say what is
+  // missing rather than refusing in silence.
   function syncRun() {
-    $('#ws-run').disabled = S.busy || !S.files.length;
+    var hasFiles = S.files.length > 0;
+    var hasText = $('#ws-prompt').value.trim().length > 0;
+    $('#ws-run').disabled = S.busy || !hasFiles;
+
+    var note = $('#composer-note');
+    if (!hasFiles && hasText) {
+      note.textContent = 'Add a photo or scan of your work \u2014 Noema reads handwriting, and cannot analyse typed text yet.';
+      note.classList.add('is-warn');
+    } else if (!hasFiles) {
+      note.textContent = 'Drop a photo of your work above to run an analysis.';
+      note.classList.remove('is-warn');
+    } else {
+      note.textContent = NOTE_DEFAULT;
+      note.classList.remove('is-warn');
+    }
   }
 
   /* ── the conversation log ──────────────────────────────────────────── */
@@ -411,8 +431,13 @@
     });
 
     $('#ws-run').addEventListener('click', run);
+    $('#ws-prompt').addEventListener('input', syncRun);
     $('#ws-prompt').addEventListener('keydown', function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); run(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if ($('#ws-run').disabled) { toast('Add a photo of your work first \u2014 typed text alone cannot be analysed yet.'); return; }
+        run();
+      }
     });
   }
 
