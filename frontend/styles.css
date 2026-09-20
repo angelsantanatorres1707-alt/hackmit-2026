@@ -159,6 +159,8 @@ body[data-stage="working"] .stage-center { display: flex; align-items: center; j
    so classic.html, which shares this sheet, keeps its top-aligned layout. */
 .landing main { min-height: calc(100vh - 72px); display: grid; place-items: center; }
 .landing .hero { padding: 0 0 40px; }
+/* No subhead on the landing any more, so the button needs its own air. */
+.landing .hero h1 + .cta { margin-top: 46px; }
 
 /* ── cards ───────────────────────────────────────────────────────────── */
 .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
