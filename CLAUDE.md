@@ -129,8 +129,12 @@ ffmpeg -i out.mp4 -vf "select='eq(n\,120)'" -fps_mode passthrough frame.png
 
 ## Known open items
 
-- The animation's first frame is nearly empty (the grid animates in from
-  nothing), so it flashes blank on every loop. Scene-side fix pending.
+- Every render now opens with a title beat and a concept beat
+  (`backend/scenes/prologue.py`) before the student's work. Act 2 is chosen by
+  `concept_for()` from the template name and params; an unrecognised topic
+  skips it rather than showing a beat that explains the wrong idea.
+  Concept beats use HARD-CODED example values, never the student's, so they
+  cannot leak the answer to the problem on screen.
 - `/api/analyze` still returns `correct_value` and `scene_params.correct_display`
   in JSON. The video is clean, but devtools reveals the answer.
 - `docs/TEMPLATE_AUDIT.md` ranks the scene templates by whether the error is

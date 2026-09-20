@@ -1383,6 +1383,18 @@ class ParamScene(Scene):
     def construct(self) -> None:
         self.camera.background_color = BG
         self.p = self.resolve()
+        # Acts 1 and 2 -- the title, then what the idea under study actually IS,
+        # on numbers that are not the student's. Act 3 is the template itself.
+        # Imported here rather than at module scope: prologue imports from this
+        # module, and a top-level import would be circular. Both spellings are
+        # needed -- the API imports this as a package, the manim CLI runs the
+        # scene file as a standalone script.
+        try:
+            from .prologue import play_prologue
+        except ImportError:
+            from prologue import play_prologue
+
+        play_prologue(self, self.p, scene_name=type(self).__name__)
         self.build_scene(self.p)
 
     def build_scene(self, p: dict) -> None:  # pragma: no cover - overridden
