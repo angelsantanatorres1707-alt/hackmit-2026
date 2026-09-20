@@ -116,6 +116,33 @@ def _flat(v: Optional[Val]) -> Optional[list[float]]:
     return out
 
 
+def _subject(env: dict) -> Optional[Val]:
+    """The square matrix this problem is about, whatever the student called it.
+
+    Four scene builders used to read env.get("M") directly. Students write "A"
+    far more often, so every one of them got None, raised SceneUnavailable and
+    fell back to StaticStepHighlight -- a static slide that TEMPLATE_AUDIT.md
+    ranks 12th and describes as "not a demo animation". The mathematics was
+    right; the animation was quietly the worst one available.
+    """
+    for name in ("M", "A"):
+        v = env.get(name)
+        if _is_square(v):
+            return v
+    square = [v for k, v in env.items() if _is_square(v)]
+    return square[0] if len(square) == 1 else None
+
+
+def _is_square(v: Optional[Val]) -> bool:
+    if v is None or not getattr(v, "is_matrix", False):
+        return False
+    try:
+        r, c = v.obj.shape
+    except Exception:
+        return False
+    return r == c > 1
+
+
 def _is_2x2(v: Optional[Val]) -> bool:
     return bool(v is not None and v.is_matrix and v.obj.shape == (2, 2))
 
@@ -664,7 +691,7 @@ def _grid_order(verdict, ext, env, S, C):
 
 def _grid_roundtrip(verdict, ext, env, S, C):
     """LA07/LA08: apply M, then the claimed inverse. Does the grid come home?"""
-    M = env.get("M")
+    M = _subject(env)
     m = _rows(M)
     if not (_is_2x2(M) and _finite(m) and _det_ok(m)):
         return _grid_single(verdict, ext, env, S, C)
@@ -685,7 +712,7 @@ def _grid_roundtrip(verdict, ext, env, S, C):
 
 
 def _determinant(verdict, ext, env, S, C):
-    M = env.get("M")
+    M = _subject(env)
     m = _rows(M)
     if m is None or not _finite(m) or len(m) not in (2, 3) or len(m) != len(m[0]):
         raise SceneUnavailable("no square given matrix to stretch")
@@ -710,7 +737,7 @@ def _determinant(verdict, ext, env, S, C):
 
 
 def _eigen_vector(verdict, ext, env, S, C):
-    M = env.get("M")
+    M = _subject(env)
     m = _rows(M)
     if not (_is_2x2(M) and _finite(m)):
         raise SceneUnavailable("eigen ray test needs a 2x2 given matrix")
@@ -729,7 +756,7 @@ def _eigen_vector(verdict, ext, env, S, C):
 
 
 def _eigen_value(verdict, ext, env, S, C):
-    M = env.get("M")
+    M = _subject(env)
     m = _rows(M)
     if not (_is_2x2(M) and _finite(m)):
         raise SceneUnavailable("eigen ray test needs a 2x2 given matrix")

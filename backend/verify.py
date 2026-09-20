@@ -621,27 +621,81 @@ def wrap(obj: Any, *, kind: Optional[str] = None, orientation: Optional[str] = N
 # What SHOULD this step have produced?
 # --------------------------------------------------------------------------
 
+# Candidate names for an operation's operands, tried in order. Students call a
+# matrix "A" far more often than "M"; when these listed only "M", every one of
+# determinant / inverse / char_poly / eigenvector_solve found no symbol, `syms`
+# came back empty, the `and syms` guard skipped the check, and a wrong answer
+# passed SILENTLY. "det A = 22" for a matrix whose determinant is 2 was reported
+# as "nothing in this work disagrees with the problem".
 _OP_SYMBOL_DEFAULTS = {
     "multiply": ["A", "B"],
     "dot": ["u", "v"],
     "cross": ["u", "v"],
     "project": ["u", "v"],
-    "normalize": ["v"],
-    "transpose": ["A"],
-    "inverse_formula": ["M"],
-    "determinant_expand": ["M"],
-    "cofactor": ["M"],
-    "char_poly": ["M"],
-    "solve_char_poly": ["M"],
-    "eigenvector_solve": ["M"],
+    "normalize": ["v", "u"],
+    "transpose": ["A", "M"],
+    "inverse_formula": ["A", "M"],
+    "determinant_expand": ["A", "M"],
+    "cofactor": ["A", "M"],
+    "char_poly": ["A", "M"],
+    "solve_char_poly": ["A", "M"],
+    "eigenvector_solve": ["A", "M"],
 }
+
+# Operations that act on exactly ONE matrix. For these, if no name matched, a
+# single matrix in scope is unambiguously the operand whatever it is called.
+_SINGLE_MATRIX_OPS = frozenset({
+    "transpose", "inverse_formula", "determinant_expand", "cofactor",
+    "char_poly", "solve_char_poly", "eigenvector_solve",
+})
+
+# The extractor is a language model choosing from an enum, and it emits
+# near-misses. Every one of these used to fall through to "no handler", which
+# reads as "this step is fine" -- the single most damaging way to be wrong.
+_OP_ALIASES = {
+    "determinant": "determinant_expand",
+    "det": "determinant_expand",
+    "inverse": "inverse_formula",
+    "invert": "inverse_formula",
+    "matrix_inverse": "inverse_formula",
+    "eigenvector": "eigenvector_solve",
+    "eigenvectors": "eigenvector_solve",
+    "eigenvalue": "solve_char_poly",
+    "eigenvalues": "solve_char_poly",
+    "matrix_multiply": "multiply",
+    "matmul": "multiply",
+    "product": "multiply",
+    "dot_product": "dot",
+    "inner_product": "dot",
+    "cross_product": "cross",
+    "projection": "project",
+    "norm": "normalize",
+    "unit_vector": "normalize",
+    "characteristic_polynomial": "char_poly",
+}
+
+
+def canonical_op(op: str) -> str:
+    """Fold a near-miss operation name onto the enum verify.py dispatches on."""
+    op = (op or "").strip().lower()
+    return _OP_ALIASES.get(op, op)
 
 
 def _syms(step: Step, env: dict[str, Val]) -> list[str]:
     given = [s for s in (step.op_args.source_symbols or []) if s in env]
     if given:
         return given
-    return [s for s in _OP_SYMBOL_DEFAULTS.get(step.claimed_operation, []) if s in env]
+    op = canonical_op(step.claimed_operation)
+    named = [s for s in _OP_SYMBOL_DEFAULTS.get(op, []) if s in env]
+    if named:
+        return named
+    if op in _SINGLE_MATRIX_OPS:
+        matrices = [k for k, v in env.items()
+                    if isinstance(getattr(v, "obj", None), sp.MatrixBase)
+                    and getattr(v, "obj").shape[0] > 1]
+        if len(matrices) == 1:
+            return matrices
+    return []
 
 
 def expected_for(step: Step, env: dict[str, Val], topic: str) -> tuple[Optional[Val], str]:
@@ -652,7 +706,7 @@ def expected_for(step: Step, env: dict[str, Val], topic: str) -> tuple[Optional[
         if obj is not None:
             return wrap(obj), f"evaluated {step.claimed_expression!r} from the givens"
 
-    op = step.claimed_operation
+    op = canonical_op(step.claimed_operation)
     syms = _syms(step, env)
 
     # 2. The labelled operation, applied to the givens.
@@ -720,15 +774,19 @@ def topic_target(topic: str, env: dict[str, Val]) -> tuple[Optional[Val], str]:
             return wrap(A * B), "the product AB"
         if topic == "matrix_add" and "A" in env and "B" in env:
             return wrap(env["A"].obj + env["B"].obj), "the sum A+B"
-        if topic == "determinant" and "M" in env:
-            return wrap(env["M"].obj.det(), kind="scalar"), "the determinant of M"
-        if topic == "inverse" and "M" in env:
-            return wrap(_inv(env["M"].obj)), "the inverse of M"
+        # These resolve the subject matrix by convention-then-uniqueness rather
+        # than demanding it be called "M": a student who wrote A got no target
+        # at all, and so was never contradicted.
+        subject = _subject_matrix(env)
+        if topic == "determinant" and subject is not None:
+            return wrap(subject.det(), kind="scalar"), "the determinant"
+        if topic == "inverse" and subject is not None:
+            return wrap(_inv(subject)), "the inverse"
         if topic == "transpose":
             if "A" in env and "B" in env:
                 return wrap((env["A"].obj * env["B"].obj).T), "the transpose of AB"
-            if "M" in env:
-                return wrap(env["M"].obj.T), "the transpose of M"
+            if subject is not None:
+                return wrap(subject.T), "the transpose"
         if topic == "dot_product" and "u" in env and "v" in env:
             return wrap(_dot(env["u"].obj, env["v"].obj), kind="scalar"), "the dot product"
         if topic == "cross_product" and "u" in env and "v" in env:
@@ -769,10 +827,29 @@ def _eigenvectors(M: sp.Matrix) -> list[tuple[sp.Expr, sp.Matrix]]:
 # Structural claims (§4: independence, span dimension, "is an eigenvector")
 # --------------------------------------------------------------------------
 
+def _subject_matrix(env: dict[str, Val]) -> Optional[sp.Matrix]:
+    """The square matrix a single-matrix question is about, or None.
+
+    Prefers the conventional names, then falls back to the only square matrix in
+    scope. Sites used to test `"M" in env` directly, so a student who called
+    their matrix A -- which is most of them -- skipped the check entirely and
+    was told their work was fine.
+    """
+    for name in ("A", "M"):
+        val = env.get(name)
+        obj = getattr(val, "obj", None)
+        if isinstance(obj, sp.MatrixBase) and obj.shape[0] == obj.shape[1] > 1:
+            return obj
+    square = [v.obj for v in env.values()
+              if isinstance(getattr(v, "obj", None), sp.MatrixBase)
+              and v.obj.shape[0] == v.obj.shape[1] > 1]
+    return square[0] if len(square) == 1 else None
+
+
 def _claims_eigenvector(step: Step, topic: str, v: Optional[Val]) -> bool:
     if v is None or not v.is_matrix or min(v.obj.shape) != 1:
         return False
-    if step.claimed_operation == "eigenvector_solve":
+    if canonical_op(step.claimed_operation) == "eigenvector_solve":
         return True
     text = f"{step.claimed_expression or ''} {step.raw_text}".lower()
     return topic == "eigen" and ("eigenvector" in text or "eigenvec" in text or bool(re.search(r"\bv\s*=", text)))
@@ -807,8 +884,9 @@ def _structural(step: Step, env: dict[str, Val], topic: str, claimed: Optional[V
             ok = claimed_dim == rank
             return ok, wrap(sp.Integer(rank), kind="scalar"), (None if ok else "LA15"), f"the span has dimension {rank}"
 
-    if _claims_eigenvector(step, topic, claimed) and "M" in env:
-        M = env["M"].obj
+    subject = _subject_matrix(env)
+    if _claims_eigenvector(step, topic, claimed) and subject is not None:
+        M = subject
         v = claimed.as_column()
         ok = is_eigvec(M, v)
         best = _closest_eigenvector(M, v)
@@ -863,6 +941,13 @@ def _M(env, k):
 def match_signature(S: Val, env: dict[str, Val], expected: Optional[Val], step: Step, topic: str) -> Optional[str]:
     """Which of the 19 taxonomy errors is this? None = Layer 1 only (still renders)."""
     A, B, M = _M(env, "A"), _M(env, "B"), _M(env, "M")
+    # The single-matrix signatures (determinant, inverse, eigen) all keyed off a
+    # matrix literally named "M". A student who wrote "A" matched none of them,
+    # so error_id stayed None and the planner fell back to a static slide
+    # instead of the determinant or eigen animation. Only adopt A as the subject
+    # when there is no second matrix, so AB problems are untouched.
+    if M is None and B is None and A is not None and A.rows == A.cols > 1:
+        M = A
     u, v = _M(env, "u"), _M(env, "v")
     if u is not None:
         u = _col(u)
@@ -918,7 +1003,7 @@ def match_signature(S: Val, env: dict[str, Val], expected: Optional[Val], step: 
     # vector was the goal. Without this gate it also matches any scalar multiple of
     # v - e.g. a wrong projection, which is LA19's story and a much better animation.
     if v is not None and S.is_matrix and (
-        step.claimed_operation == "normalize" or topic in ("eigen", "norm")
+        canonical_op(step.claimed_operation) == "normalize" or topic in ("eigen", "norm")
     ):
         sv = _col(s)
         checks += [
@@ -942,7 +1027,7 @@ _SWAP = re.compile(r"(swap|interchang|<->|<=>|R1\s*<|R2\s*<|↔)", re.I)
 
 
 def _swap_evidence(step: Step) -> bool:
-    if step.claimed_operation == "row_swap":
+    if canonical_op(step.claimed_operation) == "row_swap":
         return True
     blob = " ".join(filter(None, [step.raw_text, step.claimed_expression, step.op_args.note]))
     return bool(_SWAP.search(blob))
