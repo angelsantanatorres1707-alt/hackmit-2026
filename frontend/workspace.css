@@ -16,6 +16,7 @@
 
 /* ── top bar ─────────────────────────────────────────────────────────── */
 .ws-top {
+  position: relative;
   display: flex; align-items: center; gap: 22px;
   padding: 10px 22px;
   background: var(--bg);

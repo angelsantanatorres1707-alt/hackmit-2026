@@ -74,6 +74,7 @@ h1, h2, h3 { margin: 0; line-height: 1.12; letter-spacing: -0.02em; }
 
 /* ── top bar ─────────────────────────────────────────────────────────── */
 .topbar {
+  position: relative;
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 32px;
   border-bottom: 1px solid var(--line-soft);
@@ -82,6 +83,7 @@ h1, h2, h3 { margin: 0; line-height: 1.12; letter-spacing: -0.02em; }
   backdrop-filter: blur(10px);
 }
 .brand { display: flex; align-items: center; }
+.brand a { display: block; line-height: 0; }
 .brand-logo { height: 48px; width: auto; display: block; }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
 
@@ -94,6 +96,37 @@ h1, h2, h3 { margin: 0; line-height: 1.12; letter-spacing: -0.02em; }
 /* The mode badge is hidden by request. app.js still fills it in, so nothing
    there needs to change and re-enabling it is a one-line delete. */
 #health-pill { display: none; }
+
+
+/* ── nav ─────────────────────────────────────────────────────────────── */
+/* Centred on the PAGE, not on the space left over beside the logo, so it
+   stays put whatever the wordmark's width. Every item goes somewhere real. */
+.navbar {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 2px; padding: 5px;
+  background: var(--panel-2); border-radius: 999px;
+}
+.navbar a {
+  padding: 9px 20px; border-radius: 999px;
+  color: var(--muted); text-decoration: none;
+  font-size: 0.95rem; font-weight: 500; letter-spacing: 0.01em;
+  white-space: nowrap;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.navbar a:hover { color: var(--text); background: rgba(255, 255, 255, 0.72); }
+.navbar a.is-here {
+  background: var(--bg); color: var(--text);
+  box-shadow: 0 1px 3px rgba(16, 24, 28, 0.12);
+}
+.navbar a:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+
+/* Below this the logo and the nav would collide, so the nav stops being
+   absolute and drops onto its own row. */
+@media (max-width: 720px) {
+  .topbar { flex-wrap: wrap; justify-content: center; gap: 12px; }
+  .navbar { position: static; transform: none; }
+  .navbar a { padding: 8px 15px; font-size: 0.9rem; }
+}
 
 /* ── stages ──────────────────────────────────────────────────────────── */
 main { max-width: 1420px; margin: 0 auto; padding: 0 32px 72px; }
