@@ -3,78 +3,69 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Noema — Workspace</title>
+<title>Noema — Your problems</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="workspace.css">
 </head>
-<body class="ws-body">
+<body class="step-page">
 
-<header class="ws-top">
-  <a class="ws-brand" href="index.html" title="Back to the landing page">
-    <img src="logo.png" alt="Noema" width="545" height="200">
-  </a>
-  <nav class="navbar" aria-label="Main">
-    <a href="workspace.html" class="is-here" aria-current="page">Workspace</a>
-    <a href="about.html">What is Noema?</a>
-    <a href="faq.html">FAQ</a>
-  </nav>
+<header class="topbar">
+  <div class="brand">
+    <a href="index.html"><img class="brand-logo" src="logo.png" alt="Noema" width="545" height="200"></a>
+  </div>
+  <div class="topbar-right">
+    <nav class="navbar" aria-label="Main">
+      <a href="workspace.html" class="is-here" aria-current="page">Workspace</a>
+      <a href="about.html">What is Noema?</a>
+      <a href="faq.html">FAQ</a>
+    </nav>
+  </div>
 </header>
 
-<main class="ws">
+<main>
+  <div class="step-bloom" aria-hidden="true"></div>
 
-  <!-- ─────────────────────────── WORKSPACE ─────────────────────────── -->
-  <section class="pane">
+  <ol class="progress" aria-label="Progress">
+    <li class="is-here" aria-current="step"><span>1</span>Your problems</li>
+    <li><span>2</span>Your work</li>
+    <li><span>3</span>The animation</li>
+  </ol>
 
-    <!-- the problem, kept on screen once sent -->
-    <div class="prob-shown" id="prob-shown" hidden>
-      <div class="prob-shown-head">
-        <button class="zone-change" type="button" id="prob-change">Change</button>
+  <section class="stepbox">
+    <h1>What are you stuck on?</h1>
+    <p class="step-lede">
+      Add the problem you&rsquo;re struggling with &mdash; or the whole set, and pick one next.
+    </p>
+
+    <div class="add" id="add" tabindex="0" role="button" aria-label="Add a problem">
+      <input type="file" id="add-file" accept="image/*,.heic,.heif" multiple hidden>
+      <svg class="add-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M14 30a8 8 0 0 1 .9-15.9 11 11 0 0 1 20.8 3.1A7.5 7.5 0 0 1 35 32"/>
+        <path d="M24 34V20M18 26l6-6 6 6"/>
+      </svg>
+      <p class="add-title">Drop a photo or screenshot</p>
+      <p class="add-sub">one problem, or a whole problem set &mdash; you can paste too</p>
+      <div class="add-actions">
+        <button class="ws-btn" type="button" id="add-browse">Choose a file</button>
+        <button class="ws-btn" type="button" id="add-camera">Camera</button>
+        <button class="ws-btn" type="button" id="add-type">Type it instead</button>
       </div>
-      <div class="prob-imgs" id="prob-imgs"></div>
-      <p class="prob-statement" id="prob-statement" hidden></p>
+      <div class="add-drop-hint">Drop to add</div>
     </div>
 
-    <!-- chat 1: the problem -->
-    <div class="chat" id="chat-problem" data-dest="problem">
-      <input type="file" class="chat-file" accept="image/*,.heic,.heif" multiple hidden>
-      <ul class="chat-atts"></ul>
-      <p class="chat-label">Upload the problem</p>
-
-      <div class="chat-pill">
-        <button class="pill-act" type="button" data-act="attach" title="Attach" aria-label="Attach an image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7.5-7.5"/></svg></button>
-        <button class="pill-act" type="button" data-act="voice" title="Dictate" aria-label="Dictate"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
-        <button class="pill-act" type="button" data-act="camera" title="Camera" aria-label="Camera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
-        <textarea class="chat-text" rows="1" placeholder="Type or paste"></textarea>
-        <button class="chat-send pill-keep" type="button" disabled>Keep this</button>
+    <div class="typer" id="typer" hidden>
+      <textarea id="typer-text" rows="3"
+        placeholder="Type the problem, e.g. Row-reduce [A|b] to reduced row echelon form, where A = [1 2 -1; 2 1 1; 3 3 0] and b = [2; 5; 7]."></textarea>
+      <div class="typer-bar">
+        <button class="ws-btn" type="button" id="typer-voice">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>Dictate
+        </button>
+        <span class="typer-spacer"></span>
+        <button class="ws-btn" type="button" id="typer-cancel">Cancel</button>
+        <button class="ws-btn is-primary" type="button" id="typer-add" disabled>Add problem</button>
       </div>
-      <div class="chat-drop-hint">Drop to attach</div>
-    </div>
-
-    <!-- chat 2: your work -->
-    <div class="chat" id="chat-work" data-dest="work">
-      <input type="file" class="chat-file" accept="image/*,.heic,.heif,application/pdf,.pdf" multiple hidden>
-      <ol class="ws-log" id="ws-log"></ol>
-      <ul class="chat-atts"></ul>
-      <p class="chat-label">Upload the work</p>
-
-      <div class="chat-pill">
-        <button class="pill-act" type="button" data-act="attach" title="Attach" aria-label="Attach an image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7.5-7.5"/></svg></button>
-        <button class="pill-act" type="button" data-act="voice" title="Dictate" aria-label="Dictate"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
-        <button class="pill-act" type="button" data-act="camera" title="Camera" aria-label="Camera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
-        <textarea class="chat-text" rows="1" placeholder="Type, or ask a question"></textarea>
-      </div>
-      <div class="chat-drop-hint">Drop to attach</div>
-    </div>
-
-    <div class="ws-notice" id="ws-notice" hidden></div>
-
-    <div class="composer-foot">
-      <span class="composer-note" id="composer-note">Analysed step by step &mdash; never auto-graded</span>
-      <button class="ws-run" id="ws-run" type="button" disabled>
-        Run analysis <kbd>&#8984;</kbd><kbd>&#9166;</kbd>
-      </button>
     </div>
 
     <div class="cam" id="cam" hidden>
@@ -85,61 +76,25 @@
       </div>
     </div>
 
-  </section>
+    <ul class="probs" id="probs"></ul>
 
-  <!-- ────────────────────── VISUALIZATION ENGINE ───────────────────── -->
-  <section class="pane">
-    <div class="pane-body viz-body">
-      <div class="ws-warnings" id="ws-warnings"></div>
+    <p class="step-note" id="step-note">Nothing added yet.</p>
 
-      <div class="viz-frame" id="viz-frame">
-        <video id="ws-video" muted playsinline loop hidden></video>
-
-        <div class="viz-empty" id="viz-empty">
-          <span class="viz-empty-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16M3 12h18"/></svg></span>
-          <p class="viz-empty-title">No visualization yet</p>
-          <p class="viz-empty-sub">Run an analysis &mdash; a tailored animation renders here.</p>
-        </div>
-
-        <div class="viz-busy" id="viz-busy" hidden>
-          <div class="viz-spinner"><span></span><span></span><span></span></div>
-          <p class="viz-empty-title" id="viz-busy-title">Rendering</p>
-          <p class="viz-empty-sub" id="viz-busy-sub">The first render of a scene takes a few seconds.</p>
-        </div>
-
-        <div class="viz-failed" id="viz-failed" hidden>
-          <p class="viz-empty-title">The animation didn&rsquo;t render</p>
-          <p class="viz-empty-sub" id="viz-failed-why"></p>
-        </div>
-      </div>
-
-      <div class="transport">
-        <div class="track" id="ws-track"><div class="track-fill" id="ws-track-fill"></div></div>
-        <div class="transport-row">
-          <button class="t-btn" id="ws-play" type="button" aria-label="Play" disabled>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg>
-          </button>
-          <button class="t-btn ghost" id="ws-restart" type="button" aria-label="Restart" disabled>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M19 5l-11 7 11 7z"/></svg>
-          </button>
-          <span class="t-time" id="ws-time">00:00 / 00:00</span>
-        </div>
-      </div>
-
-      <div class="viz-hint" id="viz-hint" hidden>
-        <span class="viz-hint-eyebrow" id="viz-hint-eyebrow">Look here</span>
-        <p class="viz-hint-text" id="viz-hint-text"></p>
-      </div>
-
-      <ol class="viz-steps" id="viz-steps"></ol>
+    <div class="step-foot">
+      <button class="ws-btn" type="button" id="clear-all" hidden>Start over</button>
+      <a class="cta is-off" id="go-next" href="solve.html">
+        Continue
+        <span class="cta-dot" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M5 12h13M12 5l7 7-7 7"/></svg>
+        </span>
+      </a>
     </div>
   </section>
-
 </main>
 
 <div class="ws-toast" id="ws-toast" hidden></div>
 
-<script src="typed.js"></script>
-<script src="workspace.js"></script>
+<script src="store.js"></script>
+<script src="problems.js"></script>
 </body>
 </html>

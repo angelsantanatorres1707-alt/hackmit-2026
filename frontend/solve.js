@@ -286,65 +286,93 @@
   var problemBox = null;
   var workBox = null;
 
-  function showProblem() {
-    var shown = $('#prob-shown');
-    var imgs = $('#prob-imgs');
-    var stmt = $('#prob-statement');
-    imgs.textContent = '';
-
-    if (!S.problem) { shown.hidden = true; $('#chat-problem').hidden = false; return; }
-
-    shown.hidden = false;
-    $('#chat-problem').hidden = true;
-
-    (S.problem.files || []).forEach(function (f) {
-      var im = document.createElement('img');
-      im.src = URL.createObjectURL(f);
-      im.alt = 'The problem you uploaded';
-      imgs.appendChild(im);
-    });
-    if (S.problem.text) { stmt.textContent = S.problem.text; stmt.hidden = false; }
-    else { stmt.textContent = ''; stmt.hidden = true; }
-  }
 
   function wireChats() {
-    problemBox = makeChat($('#chat-problem'), {
-      allowPdf: false,
-      onSend: function (box) {
-        S.problem = { text: box.text.value.trim() || null, files: box.files.slice() };
-        box.clear();
-        showProblem();
-        if (workBox) workBox.sync();
-      },
-    });
-
     workBox = makeChat($('#chat-work'), {
       allowPdf: true,
-      send: '#ws-run',        // lives under the boxes, not in the bar
+      send: '#ws-run',
       onSend: function () { run(); },
       onSync: function (box) {
         var note = $('#composer-note');
         var has = box.files.length || box.text.value.trim();
         note.textContent = has
           ? 'Analysed step by step \u2014 never auto-graded'
-          : (S.problem ? 'Problem saved. Now add your work \u2014 a photo, or typed one step per line.'
-                       : 'Drop a screenshot in, or type your working one step per line.');
+          : (S.problem ? 'Now add the work you have so far \u2014 a photo, or typed one step per line.'
+                       : 'Pick the problem you are stuck on first.');
       },
     });
+  }
 
-    $('#prob-change').addEventListener('click', function () {
-      var keep = S.problem;
-      S.problem = null;
-      showProblem();
-      if (keep) {
-        if (keep.text) problemBox.text.value = keep.text;
-        if (keep.files && keep.files.length) problemBox.add(keep.files);
-        problemBox.sync();
+  /* ── which problem ─────────────────────────────────────────────────────
+   * Step 1 collected them; this asks which one is the sticking point. A page
+   * the student flagged as holding several problems says so, because we
+   * cannot split one apart for them.
+   */
+  function wirePick() {
+    var Store = global.NoemaStore;
+    if (!Store) return;
+
+    Store.loadProblems().then(function (list) {
+      var ul = $('#pick-list');
+      if (!list.length) {
+        $('#pick-empty').hidden = false;
+        $('#pick-title').textContent = 'No problem yet';
+        return;
       }
-      if (workBox) workBox.sync();
+      if (list.length === 1 && !list[0].multi) {
+        $('#pick-title').textContent = 'The problem you are working on';
+      }
+
+      list.forEach(function (p, i) {
+        var li = document.createElement('li');
+        li.className = 'pick-item';
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pick-btn';
+
+        if (p.kind === 'image' && p.file) {
+          var im = document.createElement('img');
+          im.src = URL.createObjectURL(p.file);
+          im.alt = '';
+          btn.appendChild(im);
+        }
+        var cap = document.createElement('span');
+        cap.className = 'pick-cap';
+        cap.textContent = p.kind === 'text' ? p.text : ('Problem ' + (i + 1));
+        btn.appendChild(cap);
+
+        if (p.multi) {
+          var flag = document.createElement('span');
+          flag.className = 'pick-flag';
+          flag.textContent = 'holds several \u2014 say which in your work';
+          btn.appendChild(flag);
+        }
+
+        btn.addEventListener('click', function () { choose(p, li); });
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+
+      // One unambiguous problem needs no asking.
+      if (list.length === 1 && !list[0].multi) {
+        choose(list[0], ul.firstChild);
+      } else {
+        var prev = Store.loadChoice();
+        if (prev) {
+          var found = list.filter(function (p) { return p.id === prev; })[0];
+          if (found) choose(found, ul.children[list.indexOf(found)]);
+        }
+      }
     });
 
-    showProblem();
+    function choose(p, li) {
+      S.problem = { text: p.text || null, files: p.file ? [p.file] : [] };
+      global.NoemaStore.saveChoice(p.id);
+      [].forEach.call($('#pick-list').children, function (el) { el.classList.remove('is-on'); });
+      if (li) li.classList.add('is-on');
+      if (workBox) workBox.sync();
+    }
   }
 
   // the rest of the app still asks these two questions
@@ -718,5 +746,6 @@
   wireTransport();
   wireCamera();
   wireChats();
+  wirePick();
   loadHealth();
 })(window);
