@@ -769,9 +769,9 @@ def _call_api(images: list[bytes]) -> tuple[Extraction, dict[str, Any]]:
         # Without this the SDK raises "Could not resolve authentication method",
         # which names neither the variable nor the fix.
         raise ExtractionError(
-            "ANTHROPIC_API_KEY is not set, so photographs cannot be read. Either "
-            "export ANTHROPIC_API_KEY=sk-ant-... and restart, or run in fixture "
-            "mode (USE_FIXTURE=1, which is what scripts/run.sh does by default)."
+            "OPENAI_API_KEY is not set, so photographs cannot be read. Either "
+            "run `bash scripts/setkey.sh` and restart, or stay in fixture mode "
+            "(USE_FIXTURE=1, which is what scripts/run.sh does by default)."
         )
 
     content, _sizes = _image_blocks(images)
@@ -899,7 +899,9 @@ def extract(
             # line back on screen.
             if _flag("SHOW_FIXTURE_BANNER", False):
                 why = (
-                    "ANTHROPIC_API_KEY is not set: export it and restart with"
+                    # Pinned to OpenAI: naming Anthropic's key here sent people
+                    # to set the one variable this project deliberately ignores.
+                    "OPENAI_API_KEY is not set: run `bash scripts/setkey.sh`, then restart with"
                     if not have_api_key()
                     else "The server is in fixture mode; restart with"
                 )

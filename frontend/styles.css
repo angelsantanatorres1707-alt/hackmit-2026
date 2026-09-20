@@ -176,6 +176,19 @@ body[data-stage="working"] .stage-center { display: flex; align-items: center; j
 .cta:hover { background: #000; transform: translateY(-1px); box-shadow: 0 10px 26px rgba(16, 24, 28, 0.18); }
 .cta:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
 .cta-dot { width: 38px; height: 38px; border-radius: 50%; background: var(--teal); display: grid; place-items: center; flex: none; }
+
+/* The no-paper path. A judge who walks up empty-handed should not have to
+   invent a problem before the product will show them anything. Quiet enough
+   not to compete with Get to work, legible enough to read from the back of a
+   room (--teal-ink is the text-safe teal; --teal is a fill at 1.88:1). */
+.hero-alt {
+  display: inline-block; margin-top: 18px;
+  text-decoration: none; color: var(--teal-ink);
+  font-size: 1rem; font-weight: 500;
+  border-bottom: 1px solid var(--teal-line); padding-bottom: 2px;
+}
+.hero-alt:hover { color: var(--ink); border-bottom-color: var(--ink); }
+.hero-alt:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
 .cta-dot svg { width: 17px; height: 17px; fill: none; stroke: #0A1A16; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
 /* The landing page is only the hero now -- the upload lives on workspace.html

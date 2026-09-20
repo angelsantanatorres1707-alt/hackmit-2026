@@ -141,8 +141,16 @@
 #ws-prompt:focus { outline: none; }
 #ws-prompt::placeholder { color: var(--dim); }
 
-.composer-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; }
-.composer-note { color: var(--dim); font-size: 0.9rem; max-width: 46ch; line-height: 1.45; }
+.composer-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+.composer-note { color: var(--dim); font-size: 0.9rem; max-width: 34ch; line-height: 1.45; }
+
+/* The fastest path to the payoff, so it must not read as plain text from the
+   back of a room: --line is 1.25:1 against white. Keeping it on one line needs
+   .composer-foot's flex-wrap above, or the row overflows at phone width.
+   The :hover rule is not optional -- #ws-sample (1,0,0) outranks .ws-btn:hover
+   (0,2,0) and would silently kill the hover state. */
+#ws-sample { flex: none; white-space: nowrap; border-color: var(--teal-ink); color: var(--teal-ink); }
+#ws-sample:hover { border-color: var(--teal); color: var(--teal-ink); background: var(--teal-soft); }
 .composer-note.is-warn { color: #7A5600; font-weight: 500; }
 .ws-run {
   display: inline-flex; align-items: center; gap: 10px;
@@ -414,7 +422,6 @@
 
 /* ── pill composer, modelled on a chat input ─────────────────────────── */
 .chat { justify-content: center; align-items: stretch; }
-.chat:focus-within 
 .chat-pill {
   display: flex; align-items: center; gap: 6px;
   border: 1px solid var(--line); border-radius: 999px;

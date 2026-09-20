@@ -84,6 +84,16 @@
   function loadHealth() {
     api('/api/health').then(function (h) {
       S.fps = FPS_BY_QUALITY[h.render_quality] || 30;
+
+      // backend/chat.py goes to the vision provider for every reply, and
+      // USE_FIXTURE does not mock it. With no key the box answers every
+      // question with the same sentence, which reads worse than not offering
+      // it. Keyed off vision.active rather than fixture_mode, so --live with a
+      // key still shows it.
+      if (!h.vision || !h.vision.active) {
+        var ask = $('#chat-ask');
+        if (ask) ask.hidden = true;
+      }
       // The quality/fps badge was removed by request -- render settings are our
       // business, not the viewer's. S.fps is still needed by the frame counter.
     }).catch(function () { /* S.fps keeps its default; nothing else depends on it */ });
@@ -660,11 +670,26 @@
       return;
     }
 
-    if (job.video_status === 'failed' || job.video_status === 'not_needed') {
+    // not_needed is not a failure. It covers correct work, work the checker
+    // could not read, and work with nothing checkable in it -- and folding it
+    // into the failed branch put "The animation didn't render" on screen at the
+    // exact moment the app was working. The backend writes an honest hint for
+    // each of the three; this panel stays neutral and lets the hint be specific.
+    if (job.video_status === 'not_needed') {
+      showViz('empty');
+      var t = $('#viz-empty .viz-empty-title');
+      var b = $('#viz-empty .viz-empty-sub');
+      if (t) t.textContent = 'Nothing to replay';
+      if (b) b.textContent = 'The animation replays a wrong step. None was found here \u2014 the note below says why.';
+      $('#ws-play').disabled = true;
+      $('#ws-restart').disabled = true;
+      return;
+    }
+
+    if (job.video_status === 'failed') {
       showViz('failed');
-      $('#viz-failed-why').textContent = job.video_status === 'not_needed'
-        ? 'Nothing to animate for this one.'
-        : firstLine(job.video_error || 'the renderer did not produce a file');
+      $('#viz-failed-why').textContent =
+        firstLine(job.video_error || 'the renderer did not produce a file');
       $('#ws-play').disabled = true;
       $('#ws-restart').disabled = true;
       return;
@@ -922,4 +947,12 @@
   wireChats();
   wirePick();
   loadHealth();
+
+  // Arriving from "See a worked example" on the landing page or the nav. Runs
+  // last, once the slides, the transport and workBox are all wired. Named
+  // outright rather than waiting on the /api/fixtures promise -- it is the same
+  // fallback wireSample() uses, and one less thing to go wrong on stage.
+  if (global.location.hash === '#sample') {
+    runFixture('la09_eigen', 'Walk me through a worked example');
+  }
 })(window);

@@ -48,7 +48,7 @@ multi-gigabyte TeX install and is a hard constraint on any new scene — see
 
 ```bash
 bash scripts/run.sh                 # fixture mode: no API key, no network
-bash scripts/run.sh --live          # read real photographs (needs ANTHROPIC_API_KEY)
+bash scripts/run.sh --live          # read real photographs (needs OPENAI_API_KEY)
 bash scripts/run.sh --dev           # + uvicorn auto-reload (never during a demo)
 PORT=9000 bash scripts/run.sh       # somewhere else
 ```
@@ -188,7 +188,7 @@ curl -s -X POST "localhost:8000/api/analyze?wait=true" \
 
 ---
 
-## What needs `ANTHROPIC_API_KEY`, and what does not
+## What needs `OPENAI_API_KEY`, and what does not
 
 **Needs the key — exactly one thing:** turning a photograph of handwriting into
 structured steps (`backend/extract.py`, model `claude-opus-5`, ~10–20s for a full page).
