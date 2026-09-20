@@ -376,10 +376,34 @@ def _worker() -> int:
     out_path = payload.get("out_path")
     if out_path:
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(mp4, out_path)
+        _publish(mp4, Path(out_path))
         mp4 = Path(out_path)
     print(json.dumps({"mp4": str(mp4)}))
     return 0
+
+
+def _publish(src: Path, dest: Path) -> None:
+    """Move the render into the cache with its moov atom up front.
+
+    Manim leaves moov at the end of the file, so a browser has to download the
+    whole thing before it can show frame one. The remux is a stream copy - no
+    re-encode, no quality loss, well under a second - and it is what lets the
+    video start playing while it is still arriving. Falls back to a plain copy
+    if ffmpeg is missing or unhappy; a non-faststart video still plays.
+    """
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src),
+             "-c", "copy", "-movflags", "+faststart", str(dest)],
+            capture_output=True, timeout=60,
+        )
+        if proc.returncode == 0 and dest.is_file() and dest.stat().st_size > 0:
+            return
+        print(f"faststart remux failed ({proc.returncode}), copying as-is",
+              file=sys.stderr)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"faststart remux unavailable ({exc}), copying as-is", file=sys.stderr)
+    shutil.copyfile(src, dest)
 
 
 def _find_output(media_dir: Path, quality: str, output_file: str) -> Optional[Path]:

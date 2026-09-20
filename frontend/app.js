@@ -550,6 +550,36 @@
     return job.video_status === 'pending' || job.video_status === 'rendering';
   }
 
+  /* The server can report a video as ready and the browser still show nothing:
+     a decode error, a codec it lacks, or a load that stalls. Left alone that is
+     a silent black rectangle, which is the worst thing to meet on a projector.
+     Surface it instead, and keep the hint - the hint is the product. */
+  function watchPlayback(video, fallback) {
+    if (video.dataset.watched === '1') return;
+    video.dataset.watched = '1';
+
+    const show = (reason) => {
+      if (fallback.hidden === false) return;
+      fallback.hidden = false;
+      $('#fallback-reason').textContent = reason +
+        ' The hint below still points at the step.';
+    };
+
+    video.addEventListener('error', () => {
+      const code = video.error && video.error.code;
+      show(code === 4
+        ? "This browser can't play the animation format."
+        : "The animation didn't load.");
+    });
+
+    // A stall shows no error event at all, so time it out as well.
+    video.addEventListener('loadeddata', () => { fallback.hidden = true; });
+    clearTimeout(video._stallTimer);
+    video._stallTimer = setTimeout(() => {
+      if (video.readyState === 0) show("The animation is taking too long to load.");
+    }, 12000);
+  }
+
   function applyVideoState(job) {
     const overlay = $('#video-overlay');
     const fallback = $('#video-fallback');
@@ -565,6 +595,7 @@
         video.setAttribute('src', src);
         video.load();
       }
+      watchPlayback(video, fallback);
       const p = video.play();
       if (p && p.catch) p.catch(() => toast('Press "Play it again" to start the animation.'));
       return;
