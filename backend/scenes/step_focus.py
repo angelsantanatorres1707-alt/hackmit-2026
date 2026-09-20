@@ -74,19 +74,25 @@ class StaticStepHighlight(ParamScene):
     TEMPLATE = "StaticStepHighlight"
     DURATION = 8.0
 
+    # validate() merges the caller's params OVER these, so anything left here
+    # is DRAWN when a caller does not supply it. They used to be a worked
+    # matrix-multiply example, which meant an eigenvalue step inherited
+    # shapes=[[2,3],[2,2]] and got LA03's inner-dimension argument, a
+    # "Your multiplication" title and a hint about inner counts drawn over it --
+    # none of it from the student's work. _minimal(), the deliberate floor,
+    # supplies neither shapes nor title nor hint, so it hit all three.
+    #
+    # Anything that asserts something specific about the work therefore starts
+    # empty. The example lives in example_params/ instead, where nothing
+    # renders it by accident.
     DEFAULTS = {
-        "lines": [
-            {"kind": "matrix", "rows": [["2", "1", "0"], ["1", "3", "4"]],
-             "prefix": "A = "},
-            {"kind": "matrix", "rows": [["1", "2"], ["0", "1"]], "prefix": "B = "},
-            {"kind": "text", "text": "you wrote  A B = ..."},
-        ],
-        "focus": {"line": 2, "chars": [0, 12]},
-        "annotation": "A has 3 columns, B has 2 rows",
-        "shapes": [[2, 3], [2, 2]],
+        "lines": [{"kind": "text", "text": "your work"}],
+        "focus": {"line": 0},
+        "annotation": "",
+        "shapes": None,
         "pairing": None,
-        "title": "Your multiplication, step by step",
-        "hint": "read the inner two counts in your line 3",
+        "title": "Your work, step by step",
+        "hint": "",
     }
 
     # ------------------------------------------------------------------
