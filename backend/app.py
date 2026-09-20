@@ -369,8 +369,25 @@ def _do_render(job_id: str, plan_payload: dict, quality: Optional[str]) -> None:
         job["video_error"] = "; ".join(result.get("errors") or ["render failed"])
 
 
+# Everything the animation refuses to say out loud, and therefore must not ship
+# in the JSON behind it. The video masks the reference side to "?" -- and then
+# /api/analyze handed the same numbers over in plain text, repeatedly, because
+# the page polls /api/job while the render runs. Anyone with devtools open had
+# the answer before the student did. DEMO_RUNBOOK's "close devtools and keep
+# them closed" is not a fix; this is.
+#
+# `student_value` and `replay` stay: those are the student's own work, which
+# they are always allowed to see, and the player needs `replay`.
+_PRIVATE = (
+    "video_path",       # a server path; nobody's business
+    "created",
+    "correct_value",    # the corrected result, exactly
+    "scene_params",     # carries correct_display / correct_stages / v_correct
+)
+
+
 def _public(job: dict) -> dict:
-    return {k: v for k, v in job.items() if k not in ("video_path", "created")}
+    return {k: v for k, v in job.items() if k not in _PRIVATE}
 
 
 # --------------------------------------------------------------------------
