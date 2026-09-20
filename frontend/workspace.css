@@ -19,8 +19,8 @@
   position: relative;
   display: flex; align-items: center; gap: 22px;
   padding: 10px 22px;
-  background: #EEF3F4;
-  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  border-bottom: 2px solid var(--line);
   position: sticky; top: 0; z-index: 30;
 }
 .ws-brand { display: block; flex: none; }
@@ -229,11 +229,10 @@
 .t-btn.ghost { background: var(--bg); color: var(--slate); border: 1px solid var(--line); }
 .t-btn:hover:not(:disabled) { background: #000; color: #fff; }
 .t-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.t-time, .t-frame {
+.t-time {
   font-size: 0.98rem; color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.t-frame { color: var(--dim); margin-left: auto; }
 
 /* ── hint + steps ────────────────────────────────────────────────────── */
 .viz-hint {

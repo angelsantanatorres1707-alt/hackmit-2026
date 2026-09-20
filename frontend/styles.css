@@ -77,12 +77,11 @@ h1, h2, h3 { margin: 0; line-height: 1.12; letter-spacing: -0.02em; }
   position: relative;
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 32px;
-  border-bottom: 1px solid var(--line);
+  /* The rule alone separates the bar from the page -- no tint. */
+  border-bottom: 2px solid var(--line);
   position: sticky; top: 0; z-index: 40;
-  /* A shade off the page so the bar reads as chrome, not as the top of the
-     content. Opaque rather than translucent: over the hero bloom a
-     semi-transparent bar picked up the gradient and stopped looking level. */
-  background: #EEF3F4;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
 }
 .brand { display: flex; align-items: center; }
 .brand a { display: block; line-height: 0; }

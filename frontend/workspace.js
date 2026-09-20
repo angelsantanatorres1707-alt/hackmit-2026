@@ -219,7 +219,6 @@
   function start(promise) {
     S.busy = true;
     syncRun();
-    $('#stat-viz').textContent = 'analysing';
     showViz('busy');
     $('#viz-busy-title').textContent = 'Reading your work';
     $('#viz-busy-sub').textContent = 'Transcribing every line exactly as written — mistakes included.';
@@ -233,7 +232,6 @@
     }).catch(function (err) {
       S.busy = false;
       syncRun();
-      $('#stat-viz').textContent = 'error';
       showViz('failed');
       $('#viz-failed-why').textContent = String(err.message || err);
       log('noema', 'That did not go through: ' + (err.message || err));
@@ -305,7 +303,6 @@
         video.load();
       }
       showViz('video');
-      $('#stat-viz').textContent = 'playing';
       $('#ws-play').disabled = false;
       $('#ws-restart').disabled = false;
       var p = video.play();
@@ -316,7 +313,6 @@
 
     if (job.video_status === 'failed' || job.video_status === 'not_needed') {
       showViz('failed');
-      $('#stat-viz').textContent = job.video_status === 'not_needed' ? 'not needed' : 'render failed';
       $('#viz-failed-why').textContent = job.video_status === 'not_needed'
         ? 'Nothing to animate for this one.'
         : firstLine(job.video_error || 'the renderer did not produce a file');
@@ -326,7 +322,6 @@
     }
 
     showViz('busy');
-    $('#stat-viz').textContent = 'rendering';
     $('#viz-busy-title').textContent = 'Rendering';
     $('#viz-busy-sub').textContent = 'The first render of a scene takes a few seconds; repeats are cached.';
   }
@@ -364,13 +359,7 @@
       var d = video.duration || 0;
       fill.style.width = d ? ((video.currentTime / d) * 100).toFixed(2) + '%' : '0';
       $('#ws-time').textContent = mmss(video.currentTime) + ' / ' + mmss(d);
-      var total = d ? Math.round(d * S.fps) : 0;
-      var at = Math.round(video.currentTime * S.fps);
-      $('#ws-frame').textContent = total ? ('frame ' + at + '/' + total) : 'frame —';
     });
-
-    video.addEventListener('play', function () { $('#stat-viz').textContent = 'playing'; });
-    video.addEventListener('pause', function () { $('#stat-viz').textContent = 'paused'; });
 
     $('#ws-play').addEventListener('click', function () {
       if (video.paused) video.play(); else video.pause();
