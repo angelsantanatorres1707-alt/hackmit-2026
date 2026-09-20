@@ -19,11 +19,12 @@
   position: relative;
   display: flex; align-items: center; gap: 22px;
   padding: 10px 22px;
-  background: var(--bg);
+  background: #EEF3F4;
   border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 30;
 }
 .ws-brand { display: block; flex: none; }
+.ws-top .navbar { margin-left: auto; }
 .ws-brand img { height: 40px; width: auto; display: block; }
 
 /* ── the two panes ───────────────────────────────────────────────────── */
@@ -41,11 +42,9 @@
   padding: 0 0 12px; border-bottom: 1px solid var(--line-soft);
 }
 .pane-title {
-  display: inline-flex; align-items: center; gap: 10px;
-  font-size: 0.82rem; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--text); font-weight: 600;
+  font-size: 1.14rem; color: var(--text); font-weight: 600;
+  letter-spacing: -0.01em;
 }
-.pane-title i { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); flex: none; }
 .pane-stat {
   font-size: 0.8rem; font-weight: 500; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--dim); white-space: nowrap;

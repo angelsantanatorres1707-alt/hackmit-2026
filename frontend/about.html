@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What is Noema?</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="about">
+
+<header class="topbar">
+  <div class="brand">
+    <a href="index.html"><img class="brand-logo" src="logo.png" alt="Noema" width="545" height="200"></a>
+  </div>
+  <div class="topbar-right">
+    <nav class="navbar" aria-label="Main">
+      <a href="index.html">Home</a>
+      <a href="workspace.html">Workspace</a>
+      <a href="about.html" class="is-here" aria-current="page">What is Noema?</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<article class="prose">
+
+  <h1>What is Noema?</h1>
+
+  <p class="prose-lede">
+    You photograph your handwritten linear algebra. Noema finds the first step that is
+    actually wrong, then animates <em>your</em> claimed result applied to the plane &mdash;
+    the grid and the basis vectors &mdash; right beside what the problem asked for.
+  </p>
+
+  <p class="prose-lede">
+    It never tells you the answer. It points at the step and lets you watch the two
+    pictures come apart.
+  </p>
+
+  <h2>Why not just mark it wrong</h2>
+
+  <p>
+    A red cross tells you that something failed. It does not tell you what you were
+    picturing incorrectly. Most linear algebra mistakes are geometric: a transformation
+    applied in the wrong order, a basis vector landing somewhere it shouldn't, a
+    projection that fails to meet its target at a right angle. Those are shapes, not
+    numbers &mdash; so Noema shows you the shape.
+  </p>
+
+  <h2>How it works</h2>
+
+  <ol class="steps-list">
+    <li>
+      <b>Extract.</b> A vision model transcribes the page as a
+      <em>transcriber, not a solver</em>. It returns typed steps &mdash; raw text, parsed
+      value, confidence, ambiguities, crossed-out flags &mdash; and is forbidden to fix
+      anything it sees. You get a read-back screen to correct anything the camera
+      misread.
+    </li>
+    <li>
+      <b>Verify.</b> Each step is checked with <code>sympy</code>, not a language model.
+      The check runs against the <em>original given data</em>, never against Noema's own
+      solution path &mdash; because your route through a problem is legitimately allowed
+      to differ from anyone else's.
+    </li>
+    <li>
+      <b>Locate.</b> Only the <em>first</em> failing step is blamed. Later arithmetic
+      that faithfully carries a bad number forward is not your mistake, so it is not
+      marked as one.
+    </li>
+    <li>
+      <b>Animate.</b> A scene template is chosen and filled with numbers computed from
+      the verification &mdash; the model never writes the animation. Your values drive
+      one panel; the problem's requirements drive the other.
+    </li>
+    <li>
+      <b>Point.</b> A one-line hint names a location and a thing to watch.
+    </li>
+  </ol>
+
+  <h2>What it will not do</h2>
+
+  <p>
+    The reference panel is masked on purpose. Where the correct matrix, determinant,
+    eigenvalue or solution would be printed, you see <code>[? ?]</code>, and the heading
+    reads &ldquo;what the problem asks for&rdquo; &mdash; never &ldquo;what it should
+    be&rdquo;. The geometry is the whole message.
+  </p>
+
+  <p>
+    The hint is held to the same rule by a linter that rejects digits, spelled-out
+    numbers, fractions, percentages, and even the difference or ratio between your value
+    and the right one. A hint reads like
+    <span class="quote">watch where the first basis vector lands in your step 2</span>
+    &mdash; a place to look, never the correction.
+  </p>
+
+  <h2>It gives you the benefit of the doubt</h2>
+
+  <p>
+    A step counts as wrong only if <em>every</em> plausible reading of it, against every
+    plausible reading of the givens, is wrong. Handwriting that cannot be parsed is not
+    treated as a mistake. Work you crossed out yourself is never held against you. And
+    writing <code>0.71</code> for <code>1/&radic;2</code> is a rounding, not a linear
+    algebra error.
+  </p>
+
+  <p class="prose-cta">
+    <a class="cta" href="workspace.html">
+      Get to work
+      <span class="cta-dot" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M5 12h13M12 5l7 7-7 7"/></svg>
+      </span>
+    </a>
+  </p>
+
+</article>
+</main>
+
+</body>
+</html>

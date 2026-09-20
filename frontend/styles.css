@@ -77,10 +77,12 @@ h1, h2, h3 { margin: 0; line-height: 1.12; letter-spacing: -0.02em; }
   position: relative;
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 32px;
-  border-bottom: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 40;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(10px);
+  /* A shade off the page so the bar reads as chrome, not as the top of the
+     content. Opaque rather than translucent: over the hero bloom a
+     semi-transparent bar picked up the gradient and stopped looking level. */
+  background: #EEF3F4;
 }
 .brand { display: flex; align-items: center; }
 .brand a { display: block; line-height: 0; }
@@ -99,33 +101,23 @@ h1, h2, h3 { margin: 0; line-height: 1.12; letter-spacing: -0.02em; }
 
 
 /* ── nav ─────────────────────────────────────────────────────────────── */
-/* Centred on the PAGE, not on the space left over beside the logo, so it
-   stays put whatever the wordmark's width. Every item goes somewhere real. */
-.navbar {
-  position: absolute; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 2px; padding: 5px;
-  background: var(--panel-2); border-radius: 999px;
-}
+/* Top right, plain text. No container, no pill on the current page -- weight
+   and colour carry that. Every item goes somewhere that exists. */
+.navbar { display: flex; align-items: center; gap: 30px; }
 .navbar a {
-  padding: 9px 20px; border-radius: 999px;
   color: var(--muted); text-decoration: none;
-  font-size: 0.95rem; font-weight: 500; letter-spacing: 0.01em;
-  white-space: nowrap;
-  transition: color 0.15s ease, background 0.15s ease;
+  font-size: 0.97rem; font-weight: 500; white-space: nowrap;
+  transition: color 0.15s ease;
 }
-.navbar a:hover { color: var(--text); background: rgba(255, 255, 255, 0.72); }
-.navbar a.is-here {
-  background: var(--bg); color: var(--text);
-  box-shadow: 0 1px 3px rgba(16, 24, 28, 0.12);
-}
-.navbar a:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.navbar a:hover { color: var(--text); }
+.navbar a.is-here { color: var(--text); font-weight: 600; }
+.navbar a:focus-visible { outline: 3px solid var(--teal); outline-offset: 4px; border-radius: 4px; }
 
-/* Below this the logo and the nav would collide, so the nav stops being
-   absolute and drops onto its own row. */
 @media (max-width: 720px) {
-  .topbar { flex-wrap: wrap; justify-content: center; gap: 12px; }
-  .navbar { position: static; transform: none; }
-  .navbar a { padding: 8px 15px; font-size: 0.9rem; }
+  .topbar { flex-wrap: wrap; justify-content: center; gap: 10px 0; }
+  .topbar-right { width: 100%; justify-content: center; }
+  .navbar { gap: 20px; }
+  .navbar a { font-size: 0.9rem; }
 }
 
 /* ── stages ──────────────────────────────────────────────────────────── */
@@ -190,8 +182,13 @@ body[data-stage="working"] .stage-center { display: flex; align-items: center; j
 /* The landing page is only the hero now -- the upload lives on workspace.html
    -- so centre it instead of letting it hang off the top. Scoped to .landing
    so classic.html, which shares this sheet, keeps its top-aligned layout. */
-.landing main { min-height: calc(100vh - 72px); display: grid; place-items: center; }
-.landing .hero { padding: 0 0 40px; }
+/* Body is the column, main takes the slack: the hero then centres in whatever
+   is left under the bar, without hard-coding the bar's height (which changes
+   when the nav wraps under 720px). Padding has to stay symmetric or the
+   optical centre drifts down. */
+.landing { display: flex; flex-direction: column; min-height: 100vh; }
+.landing main { flex: 1; display: grid; place-items: center; padding: 24px 32px; }
+.landing .hero { padding: 0; }
 /* No subhead on the landing any more, so the button needs its own air. */
 .landing .hero h1 + .cta { margin-top: 46px; }
 
@@ -495,3 +492,38 @@ input.cell.invalid { border-color: var(--violet); background: rgba(255, 143, 163
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ── about ───────────────────────────────────────────────────────────── */
+.prose { max-width: 68ch; margin: 0 auto; padding: 58px 0 96px; }
+.prose h1 {
+  font-family: var(--font-display); font-weight: 400;
+  font-size: clamp(2.2rem, 4.4vw, 3.2rem); letter-spacing: -0.02em; line-height: 1.08;
+  margin-bottom: 28px;
+}
+.prose h2 { font-size: 1.32rem; font-weight: 600; margin: 46px 0 14px; }
+.prose p { font-size: 1.08rem; line-height: 1.65; color: var(--muted); margin: 0 0 18px; }
+.prose-lede { font-size: 1.24rem !important; line-height: 1.6 !important; color: var(--text) !important; }
+.prose-lede em { font-style: normal; color: var(--teal-ink); font-weight: 600; }
+.prose em { font-style: italic; color: var(--text); }
+.prose b { color: var(--text); font-weight: 600; }
+.prose code {
+  font-family: var(--font-mono); font-size: 0.92em;
+  background: var(--panel-2); border-radius: 5px; padding: 2px 6px; color: var(--text);
+}
+.quote { color: var(--teal-ink); font-weight: 500; }
+
+.steps-list { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+.steps-list li {
+  position: relative; padding: 0 0 20px 46px; margin: 0;
+  font-size: 1.08rem; line-height: 1.65; color: var(--muted);
+}
+.steps-list li::before {
+  counter-increment: s; content: counter(s);
+  position: absolute; left: 0; top: 1px;
+  width: 28px; height: 28px; border-radius: 9px;
+  display: grid; place-items: center;
+  background: var(--teal-soft); color: var(--teal-ink);
+  font-size: 0.9rem; font-weight: 600;
+}
+.prose-cta { margin-top: 44px; }
+.prose-cta .cta { margin-top: 0; }
