@@ -211,6 +211,13 @@ HINTS: dict[str, tuple[str, str]] = {
              "count the numbers on each side"),
     "LA19": ("A shadow cannot be longer than the thing casting it. Watch whether the corner "
              "marker closes in {step}.", "watch whether the corner closes"),
+    # The misconception, not the slip: the directions overlap, so the shadows
+    # you add overlap too. Says what to watch, never what the answer is.
+    "LA20": ("Your directions are not square to each other, so the shadows you added share "
+             "part of the same ground. Watch whether what is left over meets the plane "
+             "squarely in {step}.", "watch whether the leftover meets it squarely"),
+    "LA21": ("A projection leaves behind something square to the whole plane. Watch whether "
+             "yours does, in {step}.", "watch the corner where it lands"),
 }
 
 GENERIC_BASIS = ("Watch where the {which} basis vector lands in {step}.",
@@ -482,6 +489,7 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
         "LA04": _determinant, "LA05": _determinant, "LA06": _determinant,
         "LA09": _eigen_vector, "LA10": _eigen_value,
         "LA11": _vector_op, "LA17": _vector_op, "LA19": _vector_op,
+        "LA20": _vector_op, "LA21": _vector_op,
         "LA12": _line_system, "LA13": _line_system,
         "LA14": _span, "LA15": _span,
     }.get(eid or "", _grid_single)
@@ -808,7 +816,8 @@ def _real_eigenvector(M: sp.Matrix) -> Optional[list[float]]:
 
 def _vector_op(verdict, ext, env, S, C):
     eid = verdict.error_id
-    op = {"LA11": "normalize", "LA17": "cross", "LA19": "projection"}.get(eid or "", "generic")
+    op = {"LA11": "normalize", "LA17": "cross", "LA19": "projection",
+          "LA20": "projection", "LA21": "projection"}.get(eid or "", "generic")
     u = _flat(env.get("u")) or _flat(env.get("v"))
     v = _flat(env.get("v")) or _flat(env.get("u"))
     w_claimed, w_correct = _flat(S), _flat(C)

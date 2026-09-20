@@ -428,6 +428,42 @@ Multiplies componentwise and reports a vector where a scalar was required.
 
 ---
 
+### LA20 — projections onto a non-orthogonal basis, added together
+**Topic:** projection · **Visual:** strong
+
+Computes proj onto each spanning vector correctly, adds them, and calls the sum the
+projection onto the span. Only valid when the spanning vectors are perpendicular.
+
+- **Student writes:** `u1=(1,0,1), u2=(1,1,0), b=(2,1,3)` → `proj_u1 b = (5/2,0,5/2)`,
+  `proj_u2 b = (3/2,3/2,0)` → `proj_W b = (4,3/2,5/2)`
+- **Correct:** `(8/3,1/3,7/3)`
+- **Check (final):** `(b - S)` is not orthogonal to every spanning vector, `S` equals the
+  sum of the one-vector projections, and the basis is not orthogonal
+- **Why it is invisible per-step:** every individual step is arithmetically perfect. The
+  mistake is the method, so nothing that checks steps one at a time can catch it.
+- **Visual consequence:** their answer *does* land in the plane, so "is it in W" proves
+  nothing. What fails is the property that defines an orthogonal projection: `b - proj`
+  must be perpendicular to the whole plane. Theirs is not, and the right-angle marker at
+  the foot does not close.
+- **Scene:** the projection comparison, falling back to `StepReplay`
+- **Hint:** "Your directions are not square to each other, so the shadows you added share
+  part of the same ground. Watch whether what is left over meets the plane squarely."
+
+---
+
+### LA21 — claimed projection is not orthogonal to the subspace
+**Topic:** projection · **Visual:** strong
+
+The general case of LA20: whatever route they took, `b - proj` is not perpendicular to the
+subspace, so it is not the orthogonal projection.
+
+- **Check (final):** `(b - S).dot(u) != 0` for some spanning vector `u`
+- **Scene:** the projection comparison, falling back to `StepReplay`
+- **Hint:** "A projection leaves behind something square to the whole plane. Watch whether
+  yours does."
+
+---
+
 ### LA19 — projection with the wrong denominator
 **Topic:** projection · **Visual:** strong
 

@@ -593,6 +593,80 @@ def _project(u, v):
     return (u.dot(v) / v.dot(v)) * v
 
 
+
+def _project_onto_span(b, basis: list) -> "sp.Matrix":
+    """Orthogonal projection of b onto span(basis), for ANY basis.
+
+    Summing _project(b, u) over the basis is only the projection when the
+    basis is orthogonal. For a general basis it double-counts whatever the
+    vectors share, which is the single most common misconception in this
+    topic -- and the reason this exists.
+
+    A(A^T A)^-1 A^T b, falling back to a least-squares solve when the columns
+    are dependent and A^T A is singular.
+    """
+    cols = [_col(v) for v in basis]
+    A = sp.Matrix.hstack(*cols)
+    G = A.T * A
+    try:
+        return sp.simplify(A * G.inv() * A.T * _col(b))
+    except Exception:  # dependent columns: G is singular
+        coeffs = (A.T * A).pinv() * A.T * _col(b)
+        return sp.simplify(A * coeffs)
+
+
+def _orthogonal_basis(basis: list) -> bool:
+    cols = [_col(v) for v in basis]
+    for i in range(len(cols)):
+        for j in range(i + 1, len(cols)):
+            if sp.simplify(cols[i].dot(cols[j])) != 0:
+                return False
+    return True
+
+
+def _projection_setup(env: dict) -> tuple:
+    """Pick the vector being projected and the vectors spanning the target.
+
+    Givens are named by the student's page, not by us: "b onto span{u1,u2}",
+    "v onto W = span{w1,w2}". Everything vector-valued is a candidate, the
+    target is the one that is not part of the span, and the span is the rest.
+    Returns (b, basis, span_names) or (None, [], []).
+    """
+    vecs = {}
+    for name, val in env.items():
+        try:
+            if val is None or not val.is_matrix:
+                continue
+            c = _col(val.obj)
+            if c.shape[1] == 1 and c.shape[0] >= 2:
+                vecs[name] = c
+        except Exception:
+            continue
+    if len(vecs) < 3:
+        return None, [], []
+
+    # A subscripted family (u1,u2 / w1,w2) is the span; the odd one out is the
+    # vector being projected. Falling back to the conventional name b.
+    families: dict[str, list] = {}
+    for name in vecs:
+        stem = name.rstrip("0123456789")
+        if stem != name:
+            families.setdefault(stem, []).append(name)
+    span_names: list[str] = []
+    for stem, members in families.items():
+        if len(members) >= 2:
+            span_names = sorted(members)
+            break
+    if not span_names:
+        return None, [], []
+
+    rest = [n for n in vecs if n not in span_names]
+    target = "b" if "b" in rest else (rest[0] if len(rest) == 1 else None)
+    if target is None:
+        return None, [], []
+    return vecs[target], [vecs[n] for n in span_names], span_names
+
+
 def _inv(m):
     if not isinstance(m, sp.MatrixBase):
         return 1 / m
@@ -833,8 +907,18 @@ def topic_target(topic: str, env: dict[str, Val]) -> tuple[Optional[Val], str]:
             return wrap(_dot(env["u"].obj, env["v"].obj), kind="scalar"), "the dot product"
         if topic == "cross_product" and "u" in env and "v" in env:
             return wrap(_cross(env["u"].obj, env["v"].obj)), "the cross product"
-        if topic == "projection" and "u" in env and "v" in env:
-            return wrap(_project(env["u"].obj, env["v"].obj)), "the projection of u onto v"
+        if topic == "projection":
+            # Projection onto a SUBSPACE, which is what "onto W = span{...}"
+            # means. Checked before the single-vector case because a page with
+            # u1, u2 and b has no given called "u" and used to fall through
+            # here entirely -- so nothing was ever compared and a wrong answer
+            # passed.
+            tgt, basis, names = _projection_setup(env)
+            if tgt is not None and len(basis) >= 2:
+                return (wrap(_project_onto_span(tgt, basis)),
+                        "the projection onto span{" + ", ".join(names) + "}")
+            if "u" in env and "v" in env:
+                return wrap(_project(env["u"].obj, env["v"].obj)), "the projection of u onto v"
         if topic == "norm" and "v" in env:
             return wrap(_col(env["v"].obj).norm(), kind="scalar"), "the norm of v"
         if topic == "solve_system" and "A" in env and "b" in env:
@@ -1032,6 +1116,37 @@ def match_signature(S: Val, env: dict[str, Val], expected: Optional[Val], step: 
             ("LA10", lambda: topic == "eigen" and S.kind in ("scalar", "scalar_list")
                 and not _is_charpoly_root(M, S)),
         ]
+    # ---- projection onto a SUBSPACE -------------------------------------
+    # Every step of this can be arithmetically perfect and the answer still
+    # wrong, because the mistake is in the method: projections onto u1 and u2
+    # only add up to the projection onto span{u1,u2} when u1 and u2 are
+    # perpendicular. Nothing per-step catches that, so it is caught here, by
+    # the property that defines an orthogonal projection -- b minus the
+    # projection must be perpendicular to the whole subspace.
+    if topic == "projection" and S.is_matrix:
+        _tgt, _basis, _names = _projection_setup(env)
+        if _tgt is not None and len(_basis) >= 2:
+            try:
+                _sv = _col(s)
+                if _sv.shape == _tgt.shape:
+                    _resid = _tgt - _sv
+                    _not_perp = any(
+                        sp.simplify(_resid.dot(_u)) != 0 for _u in _basis
+                    )
+                    _summed = same(_sv, sum((_project(_tgt, _u) for _u in _basis),
+                                            sp.zeros(*_tgt.shape)))
+                    _skew = not _orthogonal_basis(_basis)
+                    # LA20 is the specific misconception: they added the
+                    # one-vector projections and the basis was not orthogonal.
+                    # LA21 is the general failure -- it landed somewhere the
+                    # residual is not perpendicular, however they got there.
+                    checks += [
+                        ("LA20", lambda: _not_perp and _summed and _skew),
+                        ("LA21", lambda: _not_perp),
+                    ]
+            except Exception:  # noqa: BLE001
+                pass
+
     if u is not None and v is not None and S.is_matrix:
         sv = _col(s)
         checks += [
