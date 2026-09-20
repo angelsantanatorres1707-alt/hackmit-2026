@@ -538,5 +538,9 @@
    the working surfaces back to the left, and reproduces the flex column the
    old .pane gave them (plus .viz-body's gap on the animation slide). */
 .slide[hidden] { display: none; }
+/* The back out of step 2 is a real navigation, so it is a link, not a button
+   -- .ws-btn was written for <button> and an anchor needs the underline off
+   and the label centred against the button it sits beside. */
+a.ws-btn { display: inline-flex; align-items: center; text-decoration: none; }
 .slide-body { text-align: left; display: flex; flex-direction: column; min-width: 0; }
 #slide-animation .slide-body { gap: 16px; }
