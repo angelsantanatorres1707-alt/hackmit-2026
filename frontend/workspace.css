@@ -479,3 +479,18 @@
 .pill-send:disabled { background: var(--panel-2); color: #A9B4BA; cursor: not-allowed; }
 
 .chat-atts { justify-content: center; }
+
+/* ── pill: icons left, text button right, sitting low in the box ─────── */
+/* The heading takes the free space above, so the pill settles near the
+   bottom rather than floating in the middle. */
+.chat { justify-content: flex-start; }
+.chat-label { margin: auto 0 20px; }
+
+.pill-keep {
+  flex: none; padding: 7px 16px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--ink); color: #fff; white-space: nowrap;
+  font-family: var(--font-body); font-size: 0.92rem; font-weight: 500;
+  transition: background 0.15s ease;
+}
+.pill-keep:hover:not(:disabled) { background: #000; }
+.pill-keep:disabled { background: var(--panel-2); color: #A9B4BA; cursor: not-allowed; }

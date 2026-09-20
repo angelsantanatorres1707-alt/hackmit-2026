@@ -142,7 +142,7 @@
     // boxes. Both drive the same box, so both are kept in step.
     var sends = [].slice.call(root.querySelectorAll('.chat-send'));
     if (opts.send && $(opts.send)) sends.push($(opts.send));
-    var send = sends[0];
+    var send = sends[0];   // the work box's only send lives outside the pill
     var box = { root: root, text: text, files: [], listening: false };
 
     function render() {
