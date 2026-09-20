@@ -2514,12 +2514,93 @@ def check_property_claims(ext, env: dict) -> Optional[tuple]:
     return None
 
 
+# --------------------------------------------------------------------------
+# Row operations
+#
+# A row reduction is a sequence of edits to ONE evolving matrix, not a set of
+# claims about named symbols. That does not fit `expected_for`'s shape -- "apply
+# the labelled operation to the givens" -- because there is no given to apply
+# anything to: the thing being edited is whatever the previous line left behind.
+# So every row_op step came back UNCHECKED, first_error_index stayed None, and a
+# page of row reduction with a real mistake in it was answered with "nothing
+# disagrees" and a black rectangle.
+#
+# Each step is checked against the line ABOVE IT as the student actually wrote
+# it, not against a clean reduction. That way one slip is blamed once, instead
+# of every line after it inheriting the blame.
+# --------------------------------------------------------------------------
+
+_ROW_SWAP = re.compile(r"R_?(\d+)\s*(?:<-+>|<=>|\u2194|\u27f7)\s*R_?(\d+)", re.I)
+_ROW_COMBO = re.compile(r"R_?(?P<t>\d+)\s*(?:=|:=|->|-->|\u2192|\u27f6)\s*(?P<body>[^=\n]+)", re.I)
+_ROW_TERM = re.compile(
+    r"(?P<sign>[+-])?\s*(?P<k>\d+(?:\.\d+)?(?:\s*/\s*\d+)?)?\s*\*?\s*R_?(?P<r>\d+)", re.I)
+
+
+def _row_op_expected(text: str, state):
+    """-> (row index, whole matrix that operation should produce), or None.
+
+    The whole matrix is returned, not just the edited row, because a swap moves
+    TWO rows: expecting only one of them blamed the swap itself for the half it
+    was not asked about. The row index says which line the student was working
+    on, so a page that writes only the new row can still be checked.
+
+    `state` is the matrix as the page last showed it in full. Rows are written
+    1-indexed by students and stored 0-indexed here.
+    """
+    if not isinstance(state, sp.MatrixBase) or state.rows < 2:
+        return None
+    text = text or ""
+
+    m = _ROW_SWAP.search(text)
+    if m:
+        a, b = int(m.group(1)) - 1, int(m.group(2)) - 1
+        if not (0 <= a < state.rows and 0 <= b < state.rows):
+            return None
+        full = sp.Matrix(state)
+        full[a, :], full[b, :] = state.row(b), state.row(a)
+        return a, full
+
+    m = _ROW_COMBO.search(text)
+    if not m:
+        return None
+    t = int(m.group("t")) - 1
+    if not 0 <= t < state.rows:
+        return None
+
+    acc = None
+    for term in _ROW_TERM.finditer(m.group("body")):
+        r = int(term.group("r")) - 1
+        if not 0 <= r < state.rows:
+            return None
+        try:
+            k = sp.sympify((term.group("k") or "1").replace(" ", ""))
+        except Exception:  # noqa: BLE001
+            return None
+        if term.group("sign") == "-":
+            k = -k
+        acc = k * state.row(r) if acc is None else acc + k * state.row(r)
+    if acc is None:
+        return None
+    full = sp.Matrix(state)
+    full[t, :] = acc
+    return t, full
+
+
+def _row_state_from(val: "Val"):
+    """The matrix a step leaves on the page, if it wrote a whole one."""
+    if val is not None and val.is_matrix and val.obj.rows >= 2 and val.obj.cols >= 2:
+        return sp.Matrix(val.obj)
+    return None
+
+
 def verify(ext: Extraction) -> Verdict:
     topic = ext.problem.topic
     envs = _given_envs(ext)
     steps = sorted(ext.steps, key=lambda s: (s.page, s.reading_order))
     results: list[StepResult] = []
     notes: list[str] = []
+
+    row_state = None      # the matrix as the page last showed it in full
 
     for i, step in enumerate(steps):
         base = StepResult(i, step.id, step.student_label, UNCHECKED)
@@ -2534,6 +2615,36 @@ def verify(ext: Extraction) -> Verdict:
             base.reason = "could not be read; carried forward, never counted as wrong"
             results.append(base)
             continue
+
+        # A row operation is checked against the line above it, because there
+        # is no named given for `expected_for` to work from.
+        hit = _row_op_expected(step.raw_text or "", row_state)
+        if hit is not None:
+            t, want = hit
+            cand = cands[0]
+            expect, claim = None, cand
+            if cand.is_matrix and cand.obj.rows == 1 and cand.obj.cols == want.cols:
+                expect = wrap(want.row(t))               # they wrote just the new row
+            elif cand.is_matrix and cand.obj.shape == want.shape:
+                expect = wrap(want)                      # they rewrote the whole matrix
+            if expect is not None:
+                v = compare(expect, claim)
+                if v in ("eq", "rounding"):
+                    base.status, base.reason = OK, f"matches row {t + 1} after that operation"
+                elif v == "neq":
+                    base.status, base.reason = WRONG, f"does not match row {t + 1} after that operation"
+                else:
+                    base.status, base.reason = UNCHECKED, "cannot compare that row"
+                base.expected, base.claimed = expect, claim
+                results.append(base)
+                # Carry the student's OWN line forward, right or wrong, so the
+                # next operation is judged against what they actually had.
+                if claim.obj.shape == row_state.shape:
+                    row_state = sp.Matrix(claim.obj)
+                elif claim.obj.rows == 1 and claim.obj.cols == row_state.cols:
+                    row_state = sp.Matrix(row_state)
+                    row_state[t, :] = claim.obj
+                continue
 
         best: Optional[tuple] = None
         for env in envs:
@@ -2558,6 +2669,9 @@ def verify(ext: Extraction) -> Verdict:
         if ci > 0:
             notes.append(f"step {step.id}: adopted an alternate reading that makes the step work (charity)")
         results.append(base)
+        fresh = _row_state_from(cand)
+        if fresh is not None:
+            row_state = fresh
 
     verdict = Verdict(first_error_index=None, step_results=results, topic=topic, notes=notes)
     verdict.givens = envs[0]
