@@ -42,6 +42,11 @@ API_TIMEOUT = float(os.environ.get("EXTRACTION_TIMEOUT", "90"))
 # Opus 5, high-resolution vision tier (docs/EXTRACTION.md §5.1/§5.2)
 MAX_EDGE, MAX_VISUAL_TOKENS, PATCH = 2576, 4784, 28
 
+# Non-Anthropic providers bill images in 512px tiles, and new OpenAI accounts
+# start at 10k tokens per MINUTE. 2576px burns that budget on pixels that do not
+# make handwriting more readable. Override with PROVIDER_MAX_EDGE.
+PROVIDER_MAX_EDGE = int(os.environ.get("PROVIDER_MAX_EDGE", "1200"))
+
 _TRUE = {"1", "true", "yes", "on"}
 
 
@@ -201,26 +206,54 @@ class Extraction(BaseModel):
     extraction: ExtractionMeta = Field(default_factory=ExtractionMeta)
 
 
+# Hand-written and deliberately terse. Extraction.model_json_schema() is ~7000
+# characters of $defs and validation metadata; as dense JSON that is most of a
+# new OpenAI account's 10,000-tokens-per-MINUTE budget, so a second upload
+# inside a minute got a 429. This says the same thing in a tenth of the space,
+# and only the fields the pipeline actually reads. Anything extra the model
+# emits is ignored, and anything missing has a default on the model.
+_COMPACT_SCHEMA = """{
+  "problem": {"statement": str, "topic": str, "asks_for": str,
+              "givens": [{"symbol": str, "object": OBJ}]},
+  "steps": [{"id": "s1", "student_label": "1)", "reading_order": int,
+             "raw_text": "the line exactly as written",
+             "claimed_operation": OP, "value": OBJ,
+             "crossed_out": bool, "is_final_answer": bool,
+             "parse_ok": bool, "confidence": 0..1,
+             "ambiguities": [{"where": str, "read_as": str, "could_be": [str]}]}],
+  "document": {"legibility": "clean|usable|poor|unreadable"}
+}
+
+OBJ is one of:
+  {"kind":"matrix","rows":[[1,2],[3,4]]}
+  {"kind":"vector","rows":[[3,4]]}
+  {"kind":"scalar","scalars":[5]}          also "exact_scalars":["sqrt(5)"]
+  {"kind":"text","text":"..."}             when it is not numeric
+
+OP is one of: copy_given multiply add subtract scalar_multiply transpose
+determinant_expand cofactor inverse_formula augment row_swap row_scale
+row_add_multiple back_substitute char_poly solve_char_poly eigenvector_solve
+normalize dot cross project state_answer unknown"""
+
+
 def _free_tier_user_prompt() -> str:
     """The user turn for providers without structured-output support.
 
-    Anthropic is handed the schema through the SDK and never sees this. Gemini
-    and OpenRouter only guarantee "some JSON", so the shape has to be stated in
-    the prompt, and the transcriber-not-solver rule has to be repeated here:
-    it is the instruction most likely to be lost when the schema takes up most
-    of the context.
+    Anthropic is handed the schema through the SDK and never sees this. OpenAI,
+    Gemini and OpenRouter only guarantee "some JSON", so the shape has to be
+    stated in the prompt -- and the transcriber-not-solver rule repeated, since
+    it is the instruction most easily lost behind a wall of schema.
     """
-    schema = json.dumps(Extraction.model_json_schema(), separators=(",", ":"))
     return (
-        "Transcribe the handwritten work in the image(s) into JSON matching this "
-        "schema exactly. Output ONLY the JSON object, with no prose and no "
-        "markdown fence.\n\n"
-        f"SCHEMA:\n{schema}\n\n"
-        "Remember: record what is ON THE PAGE, mistakes included. Do not correct "
+        "Transcribe the handwritten work in the image(s) into JSON of this "
+        "shape. Output ONLY the JSON object: no prose, no markdown fence.\n\n"
+        f"{_COMPACT_SCHEMA}\n\n"
+        "Record what is ON THE PAGE, mistakes included. Do not correct "
         "arithmetic, do not solve the problem, do not skip a step because it is "
-        "wrong. A step you silently fix is a step the student never gets to "
-        "learn from. Set parse_ok=false and confidence low rather than guessing, "
-        "and list every digit you are unsure of in `ambiguities`."
+        "wrong: a step you silently fix is a step the student never learns "
+        "from. One step per written line, in reading order. Set parse_ok false "
+        "and confidence low rather than guessing, and list every digit you are "
+        "unsure of in ambiguities."
     )
 
 
@@ -445,11 +478,11 @@ def visual_tokens(w: int, h: int) -> int:
     return math.ceil(w / PATCH) * math.ceil(h / PATCH)
 
 
-def fit_for_model(img):
+def fit_for_model(img, max_edge: int | None = None):
     """Largest size that trips neither the long-edge nor the visual-token limit."""
     Image, _ = _pil()
     w, h = img.size
-    scale = min(1.0, MAX_EDGE / max(w, h))  # never upscale
+    scale = min(1.0, (max_edge or MAX_EDGE) / max(w, h))  # never upscale
     while True:
         nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
         if visual_tokens(nw, nh) <= MAX_VISUAL_TOKENS:
@@ -459,7 +492,7 @@ def fit_for_model(img):
         scale *= 0.97
 
 
-def prepare(data: bytes) -> tuple[bytes, str, tuple[int, int]]:
+def prepare(data: bytes, *, max_edge: int | None = None) -> tuple[bytes, str, tuple[int, int]]:
     """EXIF-rotate, convert to RGB JPEG, downscale to exactly what the model will see.
 
     The returned bytes are also what the frontend should display, so the bounding
@@ -469,7 +502,7 @@ def prepare(data: bytes) -> tuple[bytes, str, tuple[int, int]]:
     img = Image.open(io.BytesIO(data))
     img = ImageOps.exif_transpose(img)
     img = img.convert("RGB")
-    img = fit_for_model(img)
+    img = fit_for_model(img, max_edge)
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=92, optimize=True)  # NOT 60: thin strokes
     return buf.getvalue(), "image/jpeg", img.size
@@ -623,9 +656,21 @@ def _call_api(images: list[bytes]) -> tuple[Extraction, dict[str, Any]]:
         raise ExtractionError(str(exc)) from exc
 
     if provider and provider != "anthropic":
+        # The Anthropic branch below runs every image through _image_blocks ->
+        # prepare(), which EXIF-rotates and downscales. This branch sent the RAW
+        # bytes, so a 4000x3000 phone photo went out at full size and a single
+        # request cost ~7000 tokens -- over a 10k-per-minute account limit in two
+        # uploads. Downscale here too, harder: OpenAI bills images in 512px
+        # tiles, so past roughly 1200px the extra pixels cost tokens without
+        # making handwriting any more legible.
+        try:
+            prepared = [prepare(b, max_edge=PROVIDER_MAX_EDGE)[0] for b in images]
+        except Exception:
+            prepared = images          # unreadable by PIL: let the API judge it
+
         try:
             raw, meta = vision_providers.extract_json(
-                images, EXTRACTION_SYSTEM, _free_tier_user_prompt(), provider
+                prepared, EXTRACTION_SYSTEM, _free_tier_user_prompt(), provider
             )
         except vision_providers.ProviderError as exc:
             raise ExtractionError(str(exc)) from exc

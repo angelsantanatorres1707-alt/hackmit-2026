@@ -32,11 +32,16 @@ import base64
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from typing import Any
 
 TIMEOUT = float(os.environ.get("VISION_TIMEOUT", "90"))
+
+# A 429 is a wait, not a failure: the provider tells us how long.
+RETRY_429_MAX = int(os.environ.get("VISION_RETRY_429", "3"))
+RETRY_429_CAP = float(os.environ.get("VISION_RETRY_CAP", "40"))
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -198,7 +203,10 @@ def describe() -> dict[str, Any]:
 
 # ---------------------------------------------------------------- transport
 
-def _post(url: str, payload: dict, headers: dict) -> dict:
+_RETRY_AFTER = re.compile(r"try again in ([\d.]+)\s*s", re.I)
+
+
+def _post(url: str, payload: dict, headers: dict, _attempt: int = 0) -> dict:
     body = json.dumps(payload).encode()
     req = urllib.request.Request(
         url, data=body, headers={"Content-Type": "application/json", **headers}
@@ -212,11 +220,29 @@ def _post(url: str, payload: dict, headers: dict) -> dict:
             detail = exc.read().decode()[:600]
         except Exception:
             pass
-        # 429 is the one a free tier actually hits, so name it plainly.
+        # 429 is the one a real account actually hits: a new OpenAI org starts at
+        # 10k tokens per MINUTE, and one photo plus this prompt is most of that,
+        # so two uploads in a row trip it. The reply says exactly how long to
+        # wait ("Please try again in 25.494s") -- so wait that long and retry
+        # instead of handing the student a wall of JSON.
+        if exc.code == 429 and _attempt < RETRY_429_MAX:
+            hinted = _RETRY_AFTER.search(detail)
+            header = exc.headers.get("retry-after") if exc.headers else None
+            try:
+                wait = float(hinted.group(1)) if hinted else float(header or 0)
+            except (TypeError, ValueError):
+                wait = 0.0
+            # A little margin: the window is measured server-side and a retry
+            # landing on the same second just fails again.
+            wait = min(max(wait, 2.0) + 1.0, RETRY_429_CAP)
+            time.sleep(wait)
+            return _post(url, payload, headers, _attempt + 1)
         if exc.code == 429:
             raise ProviderError(
-                f"rate limited by the provider (HTTP 429). Free tiers cap "
-                f"requests per minute; wait a moment and retry. {detail}"
+                "rate limited by the provider (HTTP 429), and still limited after "
+                f"{RETRY_429_MAX} retries. A new OpenAI account is capped at 10,000 "
+                "tokens per minute; adding a payment method raises it. "
+                f"{detail}"
             ) from exc
         if exc.code in (401, 403):
             raise ProviderError(
