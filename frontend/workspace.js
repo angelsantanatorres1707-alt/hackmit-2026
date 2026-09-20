@@ -138,7 +138,11 @@
     var text = root.querySelector('.chat-text');
     var atts = root.querySelector('.chat-atts');
     var file = root.querySelector('.chat-file');
-    var send = opts.send ? $(opts.send) : root.querySelector('.chat-send');
+    // The pill's circle sends; the work box also has Run analysis under the
+    // boxes. Both drive the same box, so both are kept in step.
+    var sends = [].slice.call(root.querySelectorAll('.chat-send'));
+    if (opts.send && $(opts.send)) sends.push($(opts.send));
+    var send = sends[0];
     var box = { root: root, text: text, files: [], listening: false };
 
     function render() {
@@ -184,7 +188,7 @@
 
     function sync() {
       var has = box.files.length > 0 || text.value.trim().length > 0;
-      send.disabled = S.busy || !has;
+      sends.forEach(function (b) { b.disabled = S.busy || !has; });
       if (opts.onSync) opts.onSync(box);
     }
     box.sync = sync;
@@ -193,9 +197,13 @@
 
     text.addEventListener('input', sync);
     text.addEventListener('keydown', function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (!send.disabled) opts.onSend(box); }
+      if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+        // Enter sends, Shift+Enter makes a new line -- the composer convention.
+        e.preventDefault();
+        if (!send.disabled) opts.onSend(box);
+      }
     });
-    send.addEventListener('click', function () { if (!send.disabled) opts.onSend(box); });
+    sends.forEach(function (b) { b.addEventListener('click', function () { if (!b.disabled) opts.onSend(box); }); });
 
     file.addEventListener('change', function () { add(file.files); file.value = ''; });
 
@@ -215,6 +223,10 @@
     });
 
     root.querySelector('[data-act="attach"]').addEventListener('click', function () { file.click(); });
+
+    // grow the field with its content, like a chat composer
+    function grow() { text.style.height = 'auto'; text.style.height = Math.min(text.scrollHeight, 150) + 'px'; }
+    text.addEventListener('input', grow); grow();
     root.querySelector('[data-act="camera"]').addEventListener('click', function () {
       if (global.__noemaOpenCamera) global.__noemaOpenCamera(root.dataset.dest);
       else toast('The camera is not available in this browser.');
