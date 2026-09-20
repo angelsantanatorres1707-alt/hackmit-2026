@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ — Noema</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="about">
+
+<header class="topbar">
+  <div class="brand">
+    <a href="index.html"><img class="brand-logo" src="logo.png" alt="Noema" width="545" height="200"></a>
+  </div>
+  <div class="topbar-right">
+    <nav class="navbar" aria-label="Main">
+      <a href="workspace.html">Workspace</a>
+      <a href="about.html">What is Noema?</a>
+      <a href="faq.html" class="is-here" aria-current="page">FAQ</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<article class="prose">
+
+  <h1>FAQ</h1>
+
+  <h2>Will it just tell me the answer?</h2>
+  <p>
+    No, and not as a matter of taste &mdash; it is enforced. The reference panel in every
+    animation is masked: where the correct matrix, determinant, eigenvalue or solution
+    would be printed you see <code>[? ?]</code>. The hint is checked by a linter that
+    rejects digits, spelled-out numbers, fractions, percentages, and even the difference
+    or ratio between your value and the right one. It names a place to look and a thing
+    to watch, and that is all.
+  </p>
+
+  <h2>What maths does it cover?</h2>
+  <p>
+    Linear algebra: matrix products and the order they are applied in, inverses and
+    determinants, eigenvectors, and projections. <b>It does not do calculus</b> &mdash;
+    there is no derivative, integral or limit anywhere in it, so asking for one gets you
+    an honest no rather than a confident wrong answer.
+  </p>
+
+  <h2>Do I have to photograph my work?</h2>
+  <p>
+    No. You can type it, one step per line, and the same checks run:
+  </p>
+  <pre class="faq-pre">A  = [0 -1; 1 0]
+B  = [3 0; 0 1]
+AB = [0 -3; 1 0]</pre>
+  <p>
+    Products written as <code>AB</code> or <code>A*B</code>, sums, <code>det(A)</code>,
+    inverses as <code>A^-1</code> or <code>inv(A)</code>, and dot products all parse.
+    Entries can be integers, decimals or fractions.
+  </p>
+
+  <h2>Can I upload a PDF?</h2>
+  <p>
+    Not yet. The extractor opens every upload as an image, so a PDF comes back as an
+    extraction error. Export the page as PNG or JPEG. The picker accepts PDFs and warns
+    you rather than failing silently, but the warning is the honest state of it.
+  </p>
+
+  <h2>What if it misreads my handwriting?</h2>
+  <p>
+    A line it cannot read is <em>not</em> treated as a mistake. A step counts as wrong
+    only if every plausible reading of it, against every plausible reading of the givens,
+    is wrong. Work you crossed out yourself is never held against you, and writing
+    <code>0.71</code> for <code>1/&radic;2</code> is a rounding, not an error.
+  </p>
+
+  <h2>My method is different from the textbook's. Will it mark me wrong?</h2>
+  <p>
+    It should not. Each step is checked against the <em>original given data</em>, never
+    against Noema's own solution path, precisely because your route through a problem is
+    allowed to differ. Only the first failing step is blamed &mdash; later arithmetic that
+    faithfully carries a bad number forward is not counted against you.
+  </p>
+
+  <h2>Is my work graded, or kept?</h2>
+  <p>
+    It is not graded. Nothing you upload is written to a database: analyses live in the
+    server's memory and the oldest are dropped once there are more than a couple of
+    hundred. Rendered videos are cached as files so a repeat is instant. If the server is
+    running in live mode, your photograph <em>is</em> sent to a vision model to be
+    transcribed &mdash; that is how the handwriting is read.
+  </p>
+
+  <h2>It showed me a problem I never uploaded. Why?</h2>
+  <p>
+    The server was in fixture mode, which needs no API key and replays bundled samples.
+    In that mode your photo is not read at all and a sample is shown instead. It says so
+    in red above the animation when it happens; if you see that, the work on screen is
+    not yours.
+  </p>
+
+  <h2>The animation did not render.</h2>
+  <p>
+    Rendering needs Manim, plus ffmpeg and cairo, installed on the machine running the
+    server. If those are missing every analysis still works &mdash; the step is still
+    located and the hint still appears &mdash; but the video panel reports the failure
+    instead of playing.
+  </p>
+
+  <p class="prose-cta">
+    <a class="cta" href="workspace.html">
+      Get to work
+      <span class="cta-dot" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M5 12h13M12 5l7 7-7 7"/></svg>
+      </span>
+    </a>
+  </p>
+
+</article>
+</main>
+
+</body>
+</html>

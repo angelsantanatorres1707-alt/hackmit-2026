@@ -526,3 +526,8 @@ input.cell.invalid { border-color: var(--violet); background: rgba(255, 143, 163
 }
 .prose-cta { margin-top: 44px; }
 .prose-cta .cta { margin-top: 0; }
+.faq-pre {
+  font-family: var(--font-mono); font-size: 0.98rem; line-height: 1.6;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px;
+  padding: 14px 16px; margin: 0 0 18px; overflow-x: auto; color: var(--text);
+}

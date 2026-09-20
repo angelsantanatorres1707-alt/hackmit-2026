@@ -18,6 +18,7 @@
   <nav class="navbar" aria-label="Main">
     <a href="workspace.html" class="is-here" aria-current="page">Workspace</a>
     <a href="about.html">What is Noema?</a>
+    <a href="faq.html">FAQ</a>
   </nav>
 </header>
 
@@ -40,8 +41,9 @@
     <div class="chat" id="chat-problem" data-dest="problem">
       <input type="file" class="chat-file" accept="image/*,.heic,.heif" multiple hidden>
       <ul class="chat-atts"></ul>
+      <p class="chat-label">Upload your problem</p>
       <textarea class="chat-text" rows="2"
-        placeholder="The problem you're working on — paste a screenshot, drop an image, or type it."></textarea>
+        placeholder="Paste a screenshot, drop an image, or type it here."></textarea>
       <div class="chat-bar">
         <button class="chat-act" type="button" data-act="attach" title="Attach an image" aria-label="Attach an image">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7.5-7.5"/></svg>
@@ -63,8 +65,9 @@
       <input type="file" class="chat-file" accept="image/*,.heic,.heif,application/pdf,.pdf" multiple hidden>
       <ol class="ws-log" id="ws-log"></ol>
       <ul class="chat-atts"></ul>
+      <p class="chat-label">Upload your work</p>
       <textarea class="chat-text" rows="3"
-        placeholder="Your work — drop a photo, or type it one step per line&#10;   A = [0 -1; 1 0]&#10;   AB = [0 -3; 1 0]&#10;&#10;Or just say what you're confused about."></textarea>
+        placeholder="Drop a photo, or type it one step per line&#10;   A = [0 -1; 1 0]&#10;   AB = [0 -3; 1 0]&#10;&#10;Or say what you&#39;re confused about."></textarea>
       <div class="chat-bar">
         <button class="chat-act" type="button" data-act="attach" title="Attach an image" aria-label="Attach an image">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7.5-7.5"/></svg>
@@ -75,14 +78,18 @@
         <button class="chat-act" type="button" data-act="camera" title="Camera" aria-label="Camera">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
-        <span class="chat-spacer"></span>
-        <button class="chat-send" type="button" id="ws-run" disabled>Run analysis</button>
       </div>
       <div class="chat-drop-hint">Drop to attach</div>
     </div>
 
     <div class="ws-notice" id="ws-notice" hidden></div>
-    <span class="composer-note" id="composer-note">Analysed step by step &mdash; never auto-graded</span>
+
+    <div class="composer-foot">
+      <span class="composer-note" id="composer-note">Analysed step by step &mdash; never auto-graded</span>
+      <button class="ws-run" id="ws-run" type="button" disabled>
+        Run analysis <kbd>&#8984;</kbd><kbd>&#9166;</kbd>
+      </button>
+    </div>
 
     <div class="cam" id="cam" hidden>
       <video id="cam-video" playsinline muted></video>

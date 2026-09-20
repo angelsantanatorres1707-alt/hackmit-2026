@@ -138,7 +138,7 @@
     var text = root.querySelector('.chat-text');
     var atts = root.querySelector('.chat-atts');
     var file = root.querySelector('.chat-file');
-    var send = root.querySelector('.chat-send');
+    var send = opts.send ? $(opts.send) : root.querySelector('.chat-send');
     var box = { root: root, text: text, files: [], listening: false };
 
     function render() {
@@ -308,6 +308,7 @@
 
     workBox = makeChat($('#chat-work'), {
       allowPdf: true,
+      send: '#ws-run',        // lives under the boxes, not in the bar
       onSend: function () { run(); },
       onSync: function (box) {
         var note = $('#composer-note');
