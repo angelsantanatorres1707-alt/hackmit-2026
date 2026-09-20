@@ -548,6 +548,15 @@ def prepare(data: bytes, *, max_edge: int | None = None) -> tuple[bytes, str, tu
     Image, ImageOps = _pil()
     img = Image.open(io.BytesIO(data))
     img = ImageOps.exif_transpose(img)
+    # convert("RGB") composites transparency onto BLACK. A PDF page rendered in
+    # the browser arrives as a PNG whose background is transparent, so this one
+    # line turned every uploaded PDF into black ink on a black field: the model
+    # saw a blank sheet, transcribed nothing, and the student was told their
+    # wrong work was fine. Flatten onto white -- the colour paper actually is --
+    # before dropping the alpha.
+    if img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info:
+        img = img.convert("RGBA")
+        img = Image.alpha_composite(Image.new("RGBA", img.size, (255, 255, 255, 255)), img)
     img = img.convert("RGB")
     img = fit_for_model(img, max_edge)
     buf = io.BytesIO()

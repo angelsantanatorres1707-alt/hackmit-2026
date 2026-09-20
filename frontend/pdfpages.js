@@ -77,11 +77,26 @@
     return clean;
   }
 
+  /* A pdf.js canvas starts fully TRANSPARENT: the page's black text is drawn
+   * onto nothing at all. PNG keeps that alpha, and anything that flattens it
+   * onto black -- which is what PIL's convert("RGB") does server-side -- turns
+   * the whole page into black ink on a black field. The model then sees a
+   * blank sheet, transcribes nothing, and the student is told their wrong work
+   * is fine. Paper is white; paint it white before drawing on it.
+   */
+  function whiteCanvas(w, h) {
+    var c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, w, h);
+    return c;
+  }
+
   function cropToFile(canvas, top, bottom, name) {
     var h = Math.max(1, Math.round(bottom - top));
-    var c = document.createElement('canvas');
-    c.width = canvas.width;
-    c.height = h;
+    var c = whiteCanvas(canvas.width, h);
     c.getContext('2d').drawImage(canvas, 0, Math.round(top), canvas.width, h, 0, 0, canvas.width, h);
     return new Promise(function (resolve, reject) {
       c.toBlob(function (blob) {
@@ -95,9 +110,7 @@
     var base = page.getViewport({ scale: 1 });
     var scale = Math.min(2, MAX_W / base.width);
     var vp = page.getViewport({ scale: scale });
-    var canvas = document.createElement('canvas');
-    canvas.width = Math.floor(vp.width);
-    canvas.height = Math.floor(vp.height);
+    var canvas = whiteCanvas(Math.floor(vp.width), Math.floor(vp.height));
     return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
       .then(function () {
         return new Promise(function (resolve, reject) {
@@ -135,9 +148,7 @@
                 var base = page.getViewport({ scale: 1 });
                 var scale = Math.min(2, MAX_W / base.width);
                 var vp = page.getViewport({ scale: scale });
-                var canvas = document.createElement('canvas');
-                canvas.width = Math.floor(vp.width);
-                canvas.height = Math.floor(vp.height);
+                var canvas = whiteCanvas(Math.floor(vp.width), Math.floor(vp.height));
 
                 return page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
                   .then(function () { return page.getTextContent(); })
