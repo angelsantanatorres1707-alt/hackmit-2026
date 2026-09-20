@@ -1,0 +1,279 @@
+{
+  "document": {
+    "page_count": 1,
+    "legibility": "usable",
+    "orientation_ok": true,
+    "multiple_problems_detected": false,
+    "notes": null
+  },
+  "problem": {
+    "present": true,
+    "statement": "Find an eigenvector of M.",
+    "topic": "eigen",
+    "asks_for": "an eigenvector of M",
+    "confidence": 0.92,
+    "givens": [
+      {
+        "symbol": "M",
+        "object": {
+          "kind": "matrix",
+          "shape": [
+            2,
+            2
+          ],
+          "orientation": null,
+          "rows": [
+            [
+              2,
+              1
+            ],
+            [
+              1,
+              2
+            ]
+          ],
+          "exact": null,
+          "scalars": null,
+          "exact_scalars": null,
+          "var": null,
+          "text": null,
+          "wrote_decimals": false
+        },
+        "source": "printed",
+        "ambiguities": [],
+        "alternates": [],
+        "confidence": 0.97
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "student_label": "1)",
+      "page": 1,
+      "reading_order": 1,
+      "bbox": {
+        "x": 150,
+        "y": 490,
+        "w": 700,
+        "h": 160
+      },
+      "raw_text": "M = [2 1 ; 1 2]",
+      "claimed_expression": "M",
+      "claimed_operation": "copy_given",
+      "op_args": {
+        "rows": null,
+        "scalar": null,
+        "source_symbols": [
+          "M"
+        ],
+        "note": null
+      },
+      "value": {
+        "kind": "matrix",
+        "shape": [
+          2,
+          2
+        ],
+        "orientation": null,
+        "rows": [
+          [
+            2,
+            1
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        "exact": null,
+        "scalars": null,
+        "exact_scalars": null,
+        "var": null,
+        "text": null,
+        "wrote_decimals": false
+      },
+      "alternates": [],
+      "ambiguities": [],
+      "crossed_out": false,
+      "is_final_answer": false,
+      "parse_ok": true,
+      "confidence": 0.95,
+      "confidence_reason": null
+    },
+    {
+      "id": "s2",
+      "student_label": "2)",
+      "page": 1,
+      "reading_order": 2,
+      "bbox": {
+        "x": 150,
+        "y": 680,
+        "w": 700,
+        "h": 160
+      },
+      "raw_text": "det(M - LI) = L^2 - 4L + 3",
+      "claimed_expression": null,
+      "claimed_operation": "char_poly",
+      "op_args": {
+        "rows": null,
+        "scalar": null,
+        "source_symbols": [
+          "M"
+        ],
+        "note": null
+      },
+      "value": {
+        "kind": "polynomial",
+        "shape": null,
+        "orientation": null,
+        "rows": null,
+        "exact": null,
+        "scalars": [
+          1,
+          -4,
+          3
+        ],
+        "exact_scalars": null,
+        "var": "lambda",
+        "text": null,
+        "wrote_decimals": false
+      },
+      "alternates": [],
+      "ambiguities": [],
+      "crossed_out": false,
+      "is_final_answer": false,
+      "parse_ok": true,
+      "confidence": 0.95,
+      "confidence_reason": null
+    },
+    {
+      "id": "s3",
+      "student_label": "3)",
+      "page": 1,
+      "reading_order": 3,
+      "bbox": {
+        "x": 150,
+        "y": 870,
+        "w": 700,
+        "h": 160
+      },
+      "raw_text": "L = 3, L = 1",
+      "claimed_expression": null,
+      "claimed_operation": "solve_char_poly",
+      "op_args": {
+        "rows": null,
+        "scalar": null,
+        "source_symbols": [
+          "M"
+        ],
+        "note": null
+      },
+      "value": {
+        "kind": "scalar_list",
+        "shape": null,
+        "orientation": null,
+        "rows": null,
+        "exact": null,
+        "scalars": [
+          3,
+          1
+        ],
+        "exact_scalars": null,
+        "var": null,
+        "text": null,
+        "wrote_decimals": false
+      },
+      "alternates": [],
+      "ambiguities": [],
+      "crossed_out": false,
+      "is_final_answer": false,
+      "parse_ok": true,
+      "confidence": 0.95,
+      "confidence_reason": null
+    },
+    {
+      "id": "s4",
+      "student_label": "4)",
+      "page": 1,
+      "reading_order": 4,
+      "bbox": {
+        "x": 150,
+        "y": 1060,
+        "w": 700,
+        "h": 160
+      },
+      "raw_text": "eigenvector v = (1, 0)  for L = 3",
+      "claimed_expression": null,
+      "claimed_operation": "eigenvector_solve",
+      "op_args": {
+        "rows": null,
+        "scalar": null,
+        "source_symbols": [
+          "M"
+        ],
+        "note": null
+      },
+      "value": {
+        "kind": "vector",
+        "shape": [
+          1,
+          2
+        ],
+        "orientation": "unspecified",
+        "rows": [
+          [
+            1,
+            0
+          ]
+        ],
+        "exact": null,
+        "scalars": null,
+        "exact_scalars": null,
+        "var": null,
+        "text": null,
+        "wrote_decimals": false
+      },
+      "alternates": [],
+      "ambiguities": [],
+      "crossed_out": false,
+      "is_final_answer": true,
+      "parse_ok": true,
+      "confidence": 0.94,
+      "confidence_reason": null
+    }
+  ],
+  "final_answer": {
+    "step_id": "s4",
+    "object": {
+      "kind": "vector",
+      "shape": [
+        1,
+        2
+      ],
+      "orientation": "unspecified",
+      "rows": [
+        [
+          1,
+          0
+        ]
+      ],
+      "exact": null,
+      "scalars": null,
+      "exact_scalars": null,
+      "var": null,
+      "text": null,
+      "wrote_decimals": false
+    }
+  },
+  "extraction": {
+    "unreadable_regions": [],
+    "warnings": []
+  },
+  "_meta": {
+    "title": "Eigenvector - claimed vector is not one",
+    "error_id": "LA09",
+    "topic": "eigen",
+    "expect": "LA09; the arrow lifts off its own line"
+  }
+}

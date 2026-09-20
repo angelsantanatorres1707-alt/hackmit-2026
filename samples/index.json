@@ -1,0 +1,37 @@
+[
+  {
+    "title": "Compute AB - multiplication order reversed",
+    "error_id": "LA02",
+    "topic": "matrix_multiply",
+    "expect": "LA02; two-stage compare, identical intermediate",
+    "name": "la02_order"
+  },
+  {
+    "title": "Inverse - adjugate written without 1/det",
+    "error_id": "LA07",
+    "topic": "inverse",
+    "expect": "LA07; grid returns square, un-rotated, ten times too large",
+    "name": "la07_inverse"
+  },
+  {
+    "title": "Eigenvector - claimed vector is not one",
+    "error_id": "LA09",
+    "topic": "eigen",
+    "expect": "LA09; the arrow lifts off its own line",
+    "name": "la09_eigen"
+  },
+  {
+    "title": "Projection - divided by ||v|| instead of v.v",
+    "error_id": "LA19",
+    "topic": "projection",
+    "expect": "LA19; the right-angle marker fails to close",
+    "name": "la19_projection"
+  },
+  {
+    "title": "Compute AB - one dot product cut short",
+    "error_id": null,
+    "topic": "matrix_multiply",
+    "expect": "first_error at s4; no taxonomy signature; GridTransformCompare via Layer 1",
+    "name": "la_multiply"
+  }
+]

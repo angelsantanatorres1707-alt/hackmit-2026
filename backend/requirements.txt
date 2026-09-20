@@ -1,0 +1,13 @@
+# Backend (API + brain). Manim itself is installed by scripts/setup.sh, which also
+# installs the system libs (ffmpeg, cairo, pango) it needs.
+#
+#   uv pip install --python .venv/bin/python -r backend/requirements.txt
+
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9      # multipart/form-data photo upload
+pydantic>=2.7                # the EXTRACTION.md 2.4 schema mirror
+sympy>=1.13                  # step verification
+anthropic>=0.40              # vision extraction (not needed in fixture mode)
+pillow>=10.0                 # EXIF rotation + resize to the model's exact pixels
+pillow-heif>=0.16            # iPhone photos are HEIC by default; optional but cheap

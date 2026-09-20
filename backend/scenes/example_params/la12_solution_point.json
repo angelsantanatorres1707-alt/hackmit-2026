@@ -1,0 +1,11 @@
+{
+  "template": "SolutionPointCheck",
+  "params": {
+    "equations": [[1, 2, 5], [3, 4, 11]],
+    "x_claimed": [-1, 3],
+    "x_correct": [1, 2],
+    "substitutions": [["5", "5"], ["9", "11"]],
+    "title": "Your solution, put back into both equations",
+    "hint": "watch which equation the point misses"
+  }
+}

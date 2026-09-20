@@ -1,0 +1,14 @@
+{
+  "template": "VectorOpCompare",
+  "params": {
+    "op": "projection",
+    "u": [3, 4],
+    "v": [2, 1],
+    "w_claimed": [8.94, 4.47],
+    "w_correct": [4, 2],
+    "labels": {"u": "u", "v": "v"},
+    "readouts": [["your residual . v", "-12.36"], ["correct residual . v", "0.00"]],
+    "title": "Your projection of u onto v",
+    "hint": "watch whether the corner marker closes"
+  }
+}

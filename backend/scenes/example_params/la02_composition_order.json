@@ -1,0 +1,14 @@
+{
+  "template": "CompositionOrderCompare",
+  "params": {
+    "student_stages": [[[3, 0], [0, 1]], [[0, -1], [1, 0]]],
+    "correct_stages": [[[0, -1], [1, 0]], [[3, 0], [0, 1]]],
+    "student_display": [["0", "-1"], ["3", "0"]],
+    "correct_display": [["0", "-3"], ["1", "0"]],
+    "stage_labels": ["stretch x by 3", "then rotate"],
+    "title": "The two maps of your step 2, in your order",
+    "student_label": "YOUR ORDER",
+    "correct_label": "THE OTHER ORDER",
+    "hint": "watch which way the long axis is pointing at the end"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "template": "DeterminantAreaCompare",
+  "params": {
+    "M": [[3, 4], [1, 2]],
+    "M_display": [["3", "4"], ["1", "2"]],
+    "claimed_det": "10",
+    "actual_det": "2",
+    "show_ghost_scale": true,
+    "title": "What your matrix does to one unit of area",
+    "hint": "watch the counter as the square lands"
+  }
+}
