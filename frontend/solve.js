@@ -396,6 +396,44 @@
 
   /* ── talking to the tutor about an analysis it already ran ─────────── */
 
+  /* The composer on the animation slide. Separate from the work box: that one
+     collects work, this one only ever talks about an analysis that already
+     exists. */
+  function wireAskBox() {
+    var text = $('#ask-text');
+    var send = $('#ask-send');
+    if (!text || !send) return;
+
+    function sync() { send.disabled = S.busy || !text.value.trim(); }
+    function submit() {
+      var msg = text.value.trim();
+      if (!msg || send.disabled) return;
+      if (!(S.job && S.job.job_id)) { toast('Run an analysis first.'); return; }
+      askLog('you', msg, true);
+      text.value = '';
+      sync();
+      ask(S.job.job_id, msg);
+    }
+    text.addEventListener('input', sync);
+    text.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.altKey) { e.preventDefault(); submit(); }
+    });
+    send.addEventListener('click', submit);
+    sync();
+  }
+
+  function askLog(who, msg, mine) {
+    var ol = $('#ask-log');
+    if (!ol) return log(who, msg, mine);
+    var li = document.createElement('li');
+    if (mine) li.className = 'you';
+    var w = document.createElement('span'); w.className = 'who'; w.textContent = who;
+    var m = document.createElement('span'); m.className = 'msg'; m.textContent = msg;
+    li.appendChild(w); li.appendChild(m);
+    ol.appendChild(li);
+    ol.scrollTop = ol.scrollHeight;
+  }
+
   function ask(jobId, message) {
     S.busy = true;
     syncRun();
@@ -404,9 +442,9 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: message }),
     }).then(function (out) {
-      log('noema', out.reply || 'I do not have anything to add to the hint.');
+      askLog('noema', out.reply || 'I do not have anything to add to the hint.');
       if (out.want === 'upload') {
-        log('noema', 'Drop the page in, or type it one step per line, and I will look.');
+        askLog('noema', 'Drop the page in, or type it one step per line, and I will look.');
       }
       if (out.rendered_template && S.job) {
         // The tutor rebuilt the animation. Swap it under the player without
@@ -416,12 +454,14 @@
         applyJob(S.job);
       }
     }).catch(function (err) {
-      log('noema', 'I could not reach the tutor just now \u2014 ' +
+      askLog('noema', 'I could not reach the tutor just now \u2014 ' +
                    (err && err.message ? err.message : 'no answer') +
                    '. The hint above still stands.');
     }).then(function () {
       S.busy = false;
       syncRun();
+      var t = $('#ask-text'); var b = $('#ask-send');
+      if (t && b) b.disabled = !t.value.trim();
     });
   }
 
@@ -852,6 +892,7 @@
   wireSlides();
   wireWorkZone();
   wireTransport();
+  wireAskBox();
   wireCamera();
   wireChats();
   wirePick();

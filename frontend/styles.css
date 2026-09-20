@@ -531,3 +531,22 @@ input.cell.invalid { border-color: var(--violet); background: rgba(255, 143, 163
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px;
   padding: 14px 16px; margin: 0 0 18px; overflow-x: auto; color: var(--text);
 }
+
+/* ── the composer on the animation slide ──────────────────────────────
+   Narrower and quieter than the work box: this one is for a sentence, not
+   for a page of working. */
+.ask-chat { margin-top: 22px; }
+.ask-chat .ws-log { margin: 0 0 10px; max-height: 190px; overflow-y: auto; }
+.ask-chat .ws-log:empty { display: none; }
+.ask-chat .chat-pill { display: flex; align-items: flex-end; gap: 10px; }
+.ask-chat .chat-text { flex: 1 1 auto; }
+.chat-send {
+  flex: 0 0 auto;
+  width: 38px; height: 38px;
+  border: 0; border-radius: 999px;
+  background: var(--teal-ink); color: #fff;
+  cursor: pointer;
+  display: grid; place-items: center;
+}
+.chat-send svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.1; }
+.chat-send:disabled { background: var(--panel-2); color: var(--dim); cursor: default; }
