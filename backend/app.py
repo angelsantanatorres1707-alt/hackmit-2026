@@ -394,9 +394,43 @@ async def analyze(
     try:
         ext, meta = extract_mod.extract(blobs or None, filenames=names, fixture=fixture_name)
     except extract_mod.ExtractionError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        # The photo was never read, so no render was ever attempted. Saying so in
+        # the student's words beats the provider's raw JSON under a heading that
+        # blames the renderer, which is what they saw before.
+        raise HTTPException(status_code=502, detail=_readable_extract_error(str(exc)))
 
     return JSONResponse(_public(analyze_extraction(ext, meta, wait=do_wait, quality=quality)))
+
+
+def _readable_extract_error(raw: str) -> str:
+    """Turn a provider failure into one sentence a student can act on.
+
+    The raw text is kept on the end for whoever is debugging, but the first
+    sentence has to say what happened and what to do about it.
+    """
+    low = raw.lower()
+    if "429" in raw or "rate limit" in low:
+        return (
+            "Your photo could not be read: the vision API is rate-limiting this "
+            "account. It retried and is still blocked. Wait about a minute, or "
+            "raise the cap by adding a payment method at "
+            "platform.openai.com/account/billing. You can type your work instead "
+            "in the meantime -- that path needs no API at all. "
+            f"({raw[:200]})"
+        )
+    if "401" in raw or "403" in raw or "api key" in low:
+        return (
+            "Your photo could not be read: the API key was rejected. Check it "
+            "with `bash scripts/setkey.sh`. Typing your work instead needs no "
+            f"key. ({raw[:200]})"
+        )
+    if "could not reach" in low or "timed out" in low or "timeout" in low:
+        return (
+            "Your photo could not be read: the vision API was unreachable. Check "
+            "the network. Typing your work instead needs no network. "
+            f"({raw[:200]})"
+        )
+    return f"Your photo could not be read. {raw}"
 
 
 @app.get("/api/job/{job_id}")

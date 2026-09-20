@@ -133,9 +133,10 @@ def main() -> int:
     body = req["json"]
     check("posts to /v1/chat/completions", req["path"].endswith("/chat/completions"), req["path"])
     check("sends bearer auth", req["headers"].get("Authorization") == "Bearer sk-mock")
-    check("sends the configured model", body.get("model") == "gpt-4o", str(body.get("model")))
+    check("sends the configured model", body.get("model") == vp.OPENAI_MODEL,
+          f"{body.get('model')} != {vp.OPENAI_MODEL}")
     check("asks for a json object", body.get("response_format") == {"type": "json_object"})
-    check("sends temperature for gpt-4o", body.get("temperature") == 0)
+    check("sends temperature for a chat model", body.get("temperature") == 0)
     check("system message present", body["messages"][0]["role"] == "system")
     parts = body["messages"][1]["content"]
     img_parts = [p for p in parts if p.get("type") == "image_url"]
@@ -190,7 +191,7 @@ def main() -> int:
     RECEIVED.clear(); REPLY.clear(); REPLY.update(_completion(EXTRACTION_JSON))
     vp.extract_json([img], "S", "U", "openai")
     check("no temperature for o3", "temperature" not in RECEIVED[0]["json"])
-    os.environ["OPENAI_MODEL"] = "gpt-4o"
+    os.environ.pop("OPENAI_MODEL", None)
     importlib.reload(vp)
 
     print("\n6. key checker lists vision models")

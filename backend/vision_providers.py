@@ -49,11 +49,16 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:ge
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# gpt-4o is the conservative default: vision-capable, cheap, and present on
-# essentially every account with credits. Newer models (gpt-5.x, o-series) also
-# take images - override with OPENAI_MODEL. `python -m backend.vision_providers`
-# lists what a given key can actually reach.
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+# gpt-4o-mini rather than gpt-4o. Both read handwriting well, but a new OpenAI
+# account gets a far larger tokens-per-minute allowance on the mini models, and
+# gpt-4o's 10,000/min was the whole reason a second photo inside a minute came
+# back as a rate-limit error instead of an animation. It is also several times
+# cheaper per photo.
+#
+# Override with OPENAI_MODEL if an account has room for the larger model:
+#     echo "OPENAI_MODEL=gpt-4o" >> .env
+# `python -m backend.vision_providers` lists what a given key can reach.
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 # Overridable so the request/response path can be exercised against a local
 # mock, and so an Azure/proxy/compatible endpoint works without a code change.
 OPENAI_BASE = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
