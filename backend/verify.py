@@ -1863,6 +1863,12 @@ def check_property_claims(ext, env: dict) -> Optional[tuple]:
              "LA27", "that the system has no solution", lambda: none_, False),
             (re.compile(r"\b(?:a\s+)?unique\s+solution\b|\bexactly\s+one\s+solution\b", re.I),
              "LA27", "that the system has exactly one solution", lambda: one, True),
+            # "Ax = b has a solution" / "the system is consistent". Without this
+            # the most common way of all to state the conclusion matched none of
+            # the patterns above and the page walked free.
+            (re.compile(r"\bhas\s+(?:a|at\s+least\s+one)\s+solution\b"
+                        r"|\bis\s+consistent\b|\bis\s+solvable\b", re.I),
+             "LA27", "that the system has a solution", lambda: not none_, True),
         ]
 
     steps = sorted(ext.steps, key=lambda st: (st.page, st.reading_order))
