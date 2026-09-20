@@ -80,7 +80,13 @@ LEAKY_KINDS = frozenset({"project", "normalize"})
 
 MAX_MAGNITUDE = 50.0       # validation case 6 -- past this nothing frames
 MAX_ZOOM_RATIO = 40.0      # validation case 7 -- no framing holds both ends
-EXPR_CHARS = 34            # ledger line width, STEP_REPLAY.md §3
+EXPR_CHARS = 48            # ledger line width, STEP_REPLAY.md §3
+#: 34 clipped the student's OWN claimed value off the rail ("= (4 sqr…"
+#: on la19_projection).  The rail typesets the head over two wrapped
+#: lines plus a third for the "= <value>" tail of the wrong step, which
+#: is ~23 chars a line, so 48 is what actually fits; anything longer is
+#: wrapped and then scaled by label_text, and _build_ledger now shrinks
+#: the whole rail if the extra lines would run off the bottom.
 
 # Canvas constants, verified at -qm (STEP_REPLAY.md §5)
 BOX_W, BOX_H = 9.5, 6.05

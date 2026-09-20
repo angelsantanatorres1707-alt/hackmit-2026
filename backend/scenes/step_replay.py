@@ -125,6 +125,9 @@ UNIT_FLOOR, UNIT_CEIL = 0.06, 3.0
 # no honest geometry lives.
 LEDGER_L, LEDGER_R = 3.10, 6.94
 LEDGER_TOP = 2.46
+#: The rail may not stack below this. The hint block is anchored at the frame
+#: bottom and grows upward, so a rail that runs past here collides with it.
+LEDGER_FLOOR = -3.05
 LEDGER_GAP = 0.24
 MARK_X = LEDGER_L + 0.14
 TEXT_X = LEDGER_L + 0.36
@@ -578,8 +581,23 @@ class StepReplay(ParamScene):
                 if g["kind"] == "vector"]
         spts = [np.array(s["result"]["value"], float) for s in steps
                 if s["result"]["kind"] == "vector"]
-        u_end, _o_end = self._frame(gpts + spts)
-        u0, o0 = self._frame(gpts or spts)
+        # A replay whose content IS the grid (matrix steps, no vectors) has
+        # nothing for the bbox solver to measure: it would return a span of
+        # 2*PAD and hand back a unit so large the box shows three cells.  And
+        # a matrix that STRETCHES the lattice makes that worse in the state
+        # the scene ends in.  Cap the unit so the box still reads as a grid at
+        # both ends -- the same bargain grid_step / min_stretch strike in
+        # helpers.panel, made here against the transforms this replay applies.
+        stretch = _grid_stretch(givens, steps)
+        u_cap: float | None = None
+        if stretch > 1.0 + 1e-9:
+            u_cap = self.BOX[0] / max(10.0, 5.0 * stretch)
+        if not (gpts or spts):
+            # Nothing to measure: pick a unit that just reads as a grid.
+            u_cap = min(u_cap or 1e9, self.BOX[0] / 12.0)
+
+        u_end, _o_end = self._frame(gpts + spts, cap=u_cap)
+        u0, o0 = self._frame(gpts or spts, cap=u_cap)
         if u0 > self.ZMAX * u_end:
             u0, o0 = self._frame(gpts or spts, cap=self.ZMAX * u_end)
 
@@ -587,31 +605,52 @@ class StepReplay(ParamScene):
         # either alters the plane's submobject count, and Transform then
         # null-pads, which looks like grid lines being born at a point.
         self.gstep = 1 if (self.BOX[0] / max(u_end, 1e-6)) <= 24 else 2
-        self.radius = int(min(26, max(4, math.ceil(
-            (max(self.BOX[0], self.BOX[1]) / 2 + 1.6) / max(u_end, 1e-6)))))
         cells_a = self.BOX[0] / max(u0 * self.gstep, 1e-6)
         cells_b = self.BOX[0] / max(u_end * self.gstep, 1e-6)
         self.gw, self.go = lattice_weight(math.sqrt(max(cells_a, 1.0)
                                                     * max(cells_b, 1.0)))
 
-        # Per-step frames with hysteresis: re-frame only when the unit has to
-        # drop by more than 12%, or the canvas breathes on every step and the
-        # viewer loses the thread.
+        # Per-step frames.  TWO independent triggers, and both are needed:
+        #
+        #   CONTAINMENT -- if any point visited so far would fall outside the
+        #     box at the current frame, re-frame, full stop.  A unit-ratio
+        #     test alone is NOT sufficient: the bbox CENTRE moves as well as
+        #     its size, so a claim can need only 9% more scale and still land
+        #     1.6 units past the box edge with its arrowhead eaten by the
+        #     matte (seen on the la19_projection fixture).
+        #   HYSTERESIS -- otherwise only re-frame once the unit has to drop by
+        #     more than 12%, or the canvas breathes on every step and the
+        #     viewer loses the thread.
         seq: list[tuple[float, np.ndarray] | None] = []
         visited = list(gpts)
-        u_cur = u0
+        u_cur, o_cur = u0, o0
         for st in steps:
             if st["result"]["kind"] == "vector":
                 visited.append(np.array(st["result"]["value"], float))
-                if st["kind"] == "scale_vector":
-                    pass
             ui, oi = self._frame(visited or gpts)
             ui = min(ui, u_cur)
-            if ui < HYST * u_cur:
+            if ui < HYST * u_cur or not self._fits(visited, u_cur, o_cur):
                 seq.append((ui, oi))
-                u_cur = ui
+                u_cur, o_cur = ui, oi
             else:
                 seq.append(None)
+
+        # Plane radius: ONE value for the whole scene (a different radius
+        # changes the submobject count and breaks the zoom Transform), and it
+        # has to cover the box from EVERY frame's origin.  Sizing it from
+        # box/2 assumes the origin sits near the box centre -- but the solver
+        # deliberately anchors it off-centre, so that formula left a band of
+        # bare black inside the box after a re-frame.  Measure the real worst
+        # case: the furthest box corner, in math units, over every frame.
+        reach = 0.0
+        for u_f, o_f in [(u0, o0)] + [f for f in seq if f is not None]:
+            for sx in (-1.0, 1.0):
+                for sy in (-1.0, 1.0):
+                    cx = self.BOXC[0] + sx * self.BOX[0] / 2
+                    cy = self.BOXC[1] + sy * self.BOX[1] / 2
+                    reach = max(reach, abs(cx - o_f[0]) / max(u_f, 1e-6),
+                                abs(cy - o_f[1]) / max(u_f, 1e-6))
+        self.radius = int(min(26, max(4, math.ceil(reach) + 1)))
 
         self.unit, self.origin = u0, o0
 
@@ -675,6 +714,21 @@ class StepReplay(ParamScene):
     def _frame(self, points, cap: float | None = None):
         return _frame_for(points, self.BOX, self.BOXC[:2], self.PAD,
                           self.MARGIN, cap=cap)
+
+    def _fits(self, points, unit: float, origin: np.ndarray) -> bool:
+        """Does every visited point still sit inside the box, arrowhead and
+        all?  MARGIN is sized for Arrow's tip at these stroke widths -- do not
+        shrink it, and never test the tips against the raw box."""
+        hw = self.BOX[0] / 2 - self.MARGIN
+        hh = self.BOX[1] / 2 - self.MARGIN
+        for p in [np.zeros(2)] + list(points):
+            arr = np.asarray(p, float).flatten()
+            if arr.size < 2:
+                continue
+            s = origin + unit * np.array([arr[0], arr[1], 0.0])
+            if (abs(s[0] - self.BOXC[0]) > hw or abs(s[1] - self.BOXC[1]) > hh):
+                return False
+        return True
 
     def _plane_at(self, unit: float, org: np.ndarray):
         pl = make_plane(org, radius=self.radius, radius_y=self.radius,
@@ -882,8 +936,9 @@ class StepReplay(ParamScene):
 
             tail = None
             if tail_s:
-                tail = label_text(tail_s, font_size=FS_LEDGER, color=STUDENT,
-                                  max_width=max(0.8, width - 0.45), max_lines=1)
+                tail = _left_align(
+                    label_text(tail_s, font_size=FS_LEDGER, color=STUDENT,
+                               max_width=max(0.8, width - 0.45), max_lines=2))
                 tail.align_to(np.array([TEXT_X + 0.45, 0.0, 0.0]), LEFT)
                 tail.shift(np.array([0.0, y - tail.get_top()[1], 0.0]))
                 tail.set_z_index(Z_CHROME)
@@ -892,7 +947,34 @@ class StepReplay(ParamScene):
             rows.append({"group": grp, "head": head, "tail": tail,
                          "mark_y": float(grp[0].get_center()[1]),
                          "dim": dim})
+        self._fit_ledger(rows)
         return rows
+
+    def _fit_ledger(self, rows: list[dict]) -> None:
+        """Shrink the whole rail, in place, if it runs past LEDGER_FLOOR.
+
+        The rail wraps the student's own lines, so its height depends on what
+        they wrote -- and ``_build_ledger`` stacks downward with no floor. Six
+        two-line steps, or one long ``= <value>`` tail, walk the last rows off
+        the bottom of the frame and under the hint. Scaling the rail as ONE
+        group about its top-left keeps the left margin and the relative
+        spacing exactly as laid out; only ``mark_y`` has to be recomputed,
+        because the tick/caret is placed from it at play time.
+        """
+        if not rows:
+            return
+        mobs = [r["group"] for r in rows] + [r["tail"] for r in rows
+                                             if r["tail"] is not None]
+        rail = VGroup(*mobs)
+        bottom = float(rail.get_bottom()[1])
+        if bottom >= LEDGER_FLOOR:
+            return
+        anchor = np.array([TEXT_X, LEDGER_TOP, 0.0])
+        span = LEDGER_TOP - bottom
+        factor = max(0.55, (LEDGER_TOP - LEDGER_FLOOR) / max(span, 1e-6))
+        rail.scale(factor, about_point=anchor)
+        for r in rows:
+            r["mark_y"] = float(r["group"][0].get_center()[1])
 
     def _mark(self, kind: str, y: float) -> VMobject:
         if kind == "tick":
@@ -1124,6 +1206,58 @@ class StepReplay(ParamScene):
         cap = float(np.linalg.norm(U) * np.linalg.norm(V))
         rt = float(st["run_time"])
 
+        # The arithmetic strip is a fixed card at the bottom-left of the box,
+        # so its footprint is known before anything is drawn. Compute it here
+        # and keep the component tick labels out of it: on la19_projection the
+        # green "3" landed exactly on the "|u||v|" bound and the two together
+        # read as the nonsense "|u||3|".
+        x0 = self.BOXC[0] - self.BOX[0] / 2 + 0.52
+        base = self.BOXC[1] - self.BOX[1] / 2 + 0.40
+        strip_top = base + 1.03
+        strip_right = x0 - 0.16 + BAR_LEN + 1.9
+
+        def _clear_strip(t):
+            """Push a label up out of the card's footprint, if it is in it."""
+            if (float(t.get_left()[0]) < strip_right
+                    and float(t.get_bottom()[1]) < strip_top):
+                t.shift(np.array([0.0,
+                                  strip_top + 0.10 - float(t.get_bottom()[1]),
+                                  0.0]))
+            return t
+
+        def _spread(items, gap: float = 0.09, passes: int = 4) -> None:
+            """Slide overlapping component labels apart, HORIZONTALLY.
+
+            Four digits sit on two vectors' legs at a scale the framing
+            chooses, so two of them landing on each other is a matter of what
+            the student wrote, not something a fixed offset can prevent -- on
+            la19_projection u's "3" and v's "1" met and read as "31".
+            Separating along x only is deliberate: a vertical nudge is what
+            would push a label back into the arithmetic card underneath.
+            """
+            for _ in range(passes):
+                moved = False
+                for i in range(len(items)):
+                    for j in range(i + 1, len(items)):
+                        a, b = items[i], items[j]
+                        dx = ((a.width + b.width) / 2 + gap
+                              - abs(float(a.get_center()[0]
+                                          - b.get_center()[0])))
+                        dy = ((a.height + b.height) / 2 + gap
+                              - abs(float(a.get_center()[1]
+                                          - b.get_center()[1])))
+                        if dx <= 0 or dy <= 0:
+                            continue
+                        s = -1.0 if a.get_center()[0] <= b.get_center()[0] \
+                            else 1.0
+                        a.shift(np.array([s * dx / 2, 0.0, 0.0]))
+                        b.shift(np.array([-s * dx / 2, 0.0, 0.0]))
+                        moved = True
+                if not moved:
+                    break
+            for t in items:
+                t.move_to(self._clamp_in_box(t.get_center(), t))
+
         # --- components lit up on the axes (never a perpendicular) ----
         def comps(vec, color, nudge=0.0):
             # The two vectors' x-legs both start at the origin and would
@@ -1145,11 +1279,15 @@ class StepReplay(ParamScene):
                 perp = perp / n if n > 1e-9 else np.array([0.0, 1.0, 0.0])
                 t.move_to(self._clamp_in_box(
                     (a + b) / 2 + 0.30 * perp * (-1 if d[0] != 0 else 1), t))
+                _clear_strip(t)
                 t.set_z_index(Z_GEO)
+                labels.append(t)
                 g.add(ln, t)
             return g
 
+        labels: list = []
         gu, gv = comps(U, ru.color, 0.075), comps(V, rv.color, -0.075)
+        _spread(labels)
         self.transient.add(gu, gv)
         self._play1([Create(gu)], min(0.65, rt * 0.26))
         self.play(Create(gv), run_time=min(0.55, rt * 0.22))
@@ -1157,8 +1295,6 @@ class StepReplay(ParamScene):
         # --- the arithmetic strip -------------------------------------
         reach = max(abs(cap), abs(claimed), abs(terms[0]) + abs(terms[1]), 1e-6)
         bu = BAR_LEN / reach
-        x0 = self.BOXC[0] - self.BOX[0] / 2 + 0.52
-        base = self.BOXC[1] - self.BOX[1] / 2 + 0.40
         y_track, y_terms, y_sum = base + 0.74, base + 0.38, base
 
         backing = Rectangle(width=BAR_LEN + 1.9, height=1.34)
@@ -1604,7 +1740,11 @@ class StepReplay(ParamScene):
                 perp = np.array([-dirc[1], dirc[0], 0.0])
                 cdir = np.array([C[0], C[1], 0.0])
                 side = -1.0 if float(np.dot(perp, cdir)) > 0 else 1.0
-                laid = Line(self.origin, foot, color=PROBE, stroke_width=11.0)
+                # Nudged clear of the ray: in a projection the claim runs
+                # along v, so a caliper drawn exactly on it erases v.
+                nudge = 0.13 * perp * side
+                laid = Line(self.origin + nudge, foot + nudge, color=PROBE,
+                            stroke_width=9.0)
                 laid.set_stroke(opacity=0.95)
                 cap = Line(foot - 0.26 * perp, foot + 0.26 * perp,
                            color=PROBE, stroke_width=6.0)
@@ -1655,6 +1795,44 @@ class _FakePanel:
     def pt(self, vec) -> np.ndarray:
         v = np.asarray(vec, float).flatten()
         return self.origin + np.array([v[0] * self.unit, v[1] * self.unit, 0.0])
+
+
+def _grid_stretch(givens: dict, steps: list) -> float:
+    """How far the lattice gets pulled apart by the transforms this replay
+    applies, as a product of largest singular values.
+
+    ``helpers.min_stretch`` answers the opposite question (the SQUEEZE, which
+    makes a lattice too dense); a replay that applies a map to the grid and
+    keeps it there has the expansion problem instead -- the state the video
+    HOLDS on is the transformed one, and four cells in the box is not a grid.
+    """
+    def sigma_max(M) -> float:
+        try:
+            A = np.asarray(M, float)[:2, :2]
+            sv = np.linalg.svd(A, compute_uv=False)
+            return float(sv[0]) if sv.size else 1.0
+        except Exception:  # noqa: BLE001
+            return 1.0
+
+    known: dict[str, Any] = {k: v.get("value") for k, v in (givens or {}).items()
+                             if v.get("kind") == "matrix"}
+    total = 1.0
+    for st in steps or []:
+        kind = st.get("kind")
+        if kind == "define_matrix":
+            rows = st.get("rows") or (st.get("result") or {}).get("value")
+            if st.get("bind"):
+                known[str(st["bind"])] = rows
+        elif kind == "matrix_apply":
+            M = known.get(str((st.get("args") or {}).get("M")))
+            if M is not None:
+                total *= max(1.0, sigma_max(M))
+        elif kind == "matrix_product":
+            for s in (st.get("order") or st.get("factors") or []):
+                M = known.get(str(s))
+                if M is not None:
+                    total *= max(1.0, sigma_max(M))
+    return float(np.clip(total, 1.0, 12.0))
 
 
 def _rush_out(t: float) -> float:
