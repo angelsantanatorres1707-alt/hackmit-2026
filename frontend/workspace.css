@@ -412,7 +412,7 @@
 .chat { display: flex; flex-direction: column; padding: 16px 18px 12px; }
 /* Equal height: neither box is the senior one, and an uneven pair read as a
    mistake next to the video. */
-#chat-problem, #chat-work { min-height: 290px; }
+#chat-problem, #chat-work { min-height: 286px; }
 
 .chat-label {
   flex: 1; display: grid; place-items: center; margin: 0; padding: 6px 0 10px;
@@ -423,7 +423,7 @@
 .chat-text { min-height: 84px; }
 
 /* give the right column more of the screen, and the video more of the column */
-.ws { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; padding: 18px 28px 22px; }
+.ws { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; padding: 40px 28px 22px; }
 .viz-frame { border-radius: var(--radius-lg); }
 
 @media (max-width: 920px) {
