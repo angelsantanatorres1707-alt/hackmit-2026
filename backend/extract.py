@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # --------------------------------------------------------------------------
 # Paths / configuration
@@ -108,6 +108,50 @@ class MathObject(BaseModel):
     var: Optional[str] = None
     text: Optional[str] = None
     wrote_decimals: bool = False
+
+    # A characteristic matrix has no decimal form: the entries of A - lambda*I
+    # are "2-lambda", not numbers. N2 asks for the decimal in `rows` as well,
+    # which cannot be done for a purely symbolic entry, so the model puts the
+    # symbol there and validation used to reject the whole extraction.
+    #
+    # `exact` is the field for this and verify.to_sympy() already prefers it
+    # over `rows`, so the entries are simply moved across rather than refused.
+    # Numeric extractions are untouched: this only fires when an entry is not
+    # a number.
+    @model_validator(mode="before")
+    @classmethod
+    def _symbols_belong_in_exact(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        def numeric(v: Any) -> bool:
+            if isinstance(v, bool):
+                return False
+            if isinstance(v, (int, float)):
+                return True
+            try:
+                float(str(v).strip())
+                return True
+            except (TypeError, ValueError):
+                return False
+
+        rows = data.get("rows")
+        if isinstance(rows, list) and any(
+            not numeric(e) for r in rows if isinstance(r, list) for e in r
+        ):
+            if not data.get("exact"):
+                data["exact"] = [
+                    [str(e).strip() for e in r] for r in rows if isinstance(r, list)
+                ]
+            data["rows"] = None
+
+        scalars = data.get("scalars")
+        if isinstance(scalars, list) and any(not numeric(e) for e in scalars):
+            if not data.get("exact_scalars"):
+                data["exact_scalars"] = [str(e).strip() for e in scalars]
+            data["scalars"] = None
+
+        return data
 
 
 class BBox(BaseModel):
@@ -335,8 +379,11 @@ N1. Entries go in `rows` as JSON numbers. `[[6, -5], [2, 5]]`. Not strings, not 
 N2. If any entry of an object is not a finite decimal -- a fraction, a radical, a symbol,
     a repeating decimal -- ALSO fill `exact` with the same shape, entries as plain
     sympy-parseable strings: "1/3", "-2/7", "sqrt(2)/2", "3*sqrt(5)", "lambda",
-    "lambda - 2". Put the decimal value in `rows` as well. If every entry is a finite
-    decimal, `exact` is null.
+    "lambda - 2". Put the decimal value in `rows` as well WHEN THERE IS ONE. A purely
+    symbolic entry has none -- the entries of a characteristic matrix A - lambda*I are
+    "2-lambda", not numbers -- so in that case fill `exact` and set `rows` to null
+    rather than putting the symbol in `rows`. If every entry is a finite decimal,
+    `exact` is null.
 
 N3. `wrote_decimals` is true when the student's pen wrote a decimal point, false when
     they wrote an integer, fraction or radical. It describes their notation, not your

@@ -83,9 +83,19 @@ class Val:
         return val_json(self)
 
 
+# "lambda" is a Python keyword, so sympify's tokenizer rejects it before the
+# locals mapping below ever applies -- _sym("2-lambda") raised, even though N2
+# of the extraction prompt asks for exactly that spelling. Both spellings are
+# folded onto one placeholder so they parse AND compare equal: a matrix mixing
+# "2-lambda" with "3-λ" would otherwise hold two unrelated symbols.
+_LAM_RE = re.compile(r"\blambda\b|\u03bb")
+_LAM_TOKEN = "_LAMBDA_"
+
+
 def _sym(entry) -> sp.Expr:
     if isinstance(entry, str):
-        return sp.sympify(entry.replace("^", "**"), locals={"lambda": LAM})
+        text = _LAM_RE.sub(_LAM_TOKEN, entry.replace("^", "**"))
+        return sp.sympify(text, locals={_LAM_TOKEN: LAM, "lambda": LAM})
     if isinstance(entry, float) and entry.is_integer():
         return sp.Integer(int(entry))
     return sp.nsimplify(sp.sympify(entry), rational=True, tolerance=1e-9)
