@@ -414,13 +414,7 @@
    mistake next to the video. */
 #chat-problem, #chat-work { min-height: 257px; }   /* 90% of 286 */
 
-.chat-label {
-  flex: 1; display: grid; place-items: center; margin: 0; padding: 6px 0 10px;
-  font-size: 1.22rem; font-weight: 600; color: var(--muted); text-align: center;
-  pointer-events: none;
-}
-.chat:focus-within .chat-label { color: var(--dim); }
-.chat-text { min-height: 84px; }
+.chat:focus-within .chat-text { min-height: 84px; }
 
 /* give the right column more of the screen, and the video more of the column */
 .ws { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; padding: 40px 28px 22px; }
@@ -428,19 +422,11 @@
 
 @media (max-width: 920px) {
   #chat-problem, #chat-work { min-height: 0; }
-  .chat-label { padding: 2px 0 8px; }
-}
+  }
 
 /* ── pill composer, modelled on a chat input ─────────────────────────── */
 .chat { justify-content: center; align-items: stretch; }
-.chat-label {
-  flex: 0 0 auto; display: block; margin: 0 0 22px; padding: 0;
-  font-family: var(--font-body);
-  font-size: 1.5rem; font-weight: 600; color: var(--text); text-align: center;
-  letter-spacing: -0.01em;
-}
-.chat:focus-within .chat-label { color: var(--text); }
-
+.chat:focus-within 
 .chat-pill {
   display: flex; align-items: center; gap: 6px;
   border: 1px solid var(--line); border-radius: 999px;
@@ -459,16 +445,6 @@
 .chat-pill .chat-text:focus { outline: none; }
 .chat-pill .chat-text::placeholder { color: var(--dim); }
 
-.pill-act {
-  flex: none; width: 32px; height: 32px; border-radius: 50%; border: none;
-  background: none; cursor: pointer; color: var(--slate);
-  display: grid; place-items: center;
-}
-.pill-act svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.pill-act:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
-.pill-act:disabled { opacity: 0.35; cursor: not-allowed; }
-.pill-act.listening { background: var(--teal-soft); color: var(--teal-ink); }
-.pill-act.listening svg { animation: blip 1.5s ease-in-out infinite; }
 
 .pill-send {
   flex: none; width: 34px; height: 34px; border-radius: 50%; border: none;
@@ -489,7 +465,6 @@
 /* The heading centres in the space above the pill rather than sinking to sit
    just on top of it. margin-top:auto put it at the bottom of that space; flex
    + place-items puts it in the middle of it. */
-.chat-label { flex: 1; display: grid; place-items: center; margin: 0 0 16px; }
 
 .pill-keep {
   flex: none; padding: 7px 16px; border-radius: 999px; border: none; cursor: pointer;
@@ -542,5 +517,26 @@
    -- .ws-btn was written for <button> and an anchor needs the underline off
    and the label centred against the button it sits beside. */
 a.ws-btn { display: inline-flex; align-items: center; text-decoration: none; }
+
+/* ── step 2's upload surface is step 1's ─────────────────────────────── */
+/* The dashed box IS the control on step 1 -- clicking anywhere in it opens
+   the picker -- so step 2 uses the same box rather than a panel with a row
+   of icons in a pill. #chat-work stays as the root because makeChat() binds
+   paste, drag and drop to it, but it stops drawing a panel of its own: a
+   dashed box inside a bordered card read as two controls, and only one of
+   them was clickable. */
+#chat-work {
+  border: none; background: none; padding: 0; min-height: 0;
+}
+#chat-work:focus-within { border-color: transparent; box-shadow: none; }
+#chat-work.over { background: none; }
+/* makeChat marks the root on drag; step 1 marks the box. Pass it through so
+   the drop feedback is the one step 1 gives. */
+#chat-work.over .add { border-color: var(--teal); background: var(--teal-soft); }
+#chat-work.over .add .add-icon { stroke: var(--teal-ink); }
+#chat-work.over .add-drop-hint { display: grid; }
+#chat-work .add-actions .ws-btn { display: inline-flex; align-items: center; gap: 7px; }
+#chat-work .chat-atts { margin: 14px 0 0; }
+#chat-work .chat-pill { margin-top: 16px; }
 .slide-body { text-align: left; display: flex; flex-direction: column; min-width: 0; }
 #slide-animation .slide-body { gap: 16px; }

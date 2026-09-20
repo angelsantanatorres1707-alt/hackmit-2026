@@ -645,6 +645,27 @@
     });
   }
 
+  /* ── the work box is a dropzone, the way step 1's is ───────────────── */
+
+  /* Step 1 opens the picker when you click anywhere in the dashed box, and
+     students arriving at step 2 tried the same thing and got nothing. The
+     buttons inside speak for themselves -- makeChat already binds them -- so
+     a click that lands on one is left alone rather than opening a second
+     file dialog on top of the first. */
+  function wireWorkZone() {
+    var zone = $('#work-add');
+    var file = $('#chat-work .chat-file');
+    if (!zone || !file) return;
+
+    zone.addEventListener('click', function (e) {
+      if (e.target.closest('.add-actions')) return;
+      file.click();
+    });
+    zone.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); }
+    });
+  }
+
   /* ── the two slides ────────────────────────────────────────────────── */
 
   /* Steps 2 and 3 are two sections of one document, not two pages. A render
@@ -790,6 +811,7 @@
   /* ── go ────────────────────────────────────────────────────────────── */
 
   wireSlides();
+  wireWorkZone();
   wireTransport();
   wireCamera();
   wireChats();

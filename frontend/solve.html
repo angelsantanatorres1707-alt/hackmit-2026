@@ -64,20 +64,33 @@
         </p>
       </div>
 
-      <!-- chat 2: your work -->
+      <!-- your work: step 1's surface, so the box means the same thing twice -->
       <div class="chat" id="chat-work" data-dest="work">
         <input type="file" class="chat-file" accept="image/*,.heic,.heif,application/pdf,.pdf" multiple hidden>
         <ol class="ws-log" id="ws-log"></ol>
+
+        <div class="add" id="work-add" tabindex="0" role="button" aria-label="Add your work">
+          <svg class="add-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M14 30a8 8 0 0 1 .9-15.9 11 11 0 0 1 20.8 3.1A7.5 7.5 0 0 1 35 32"/>
+            <path d="M24 34V20M18 26l6-6 6 6"/>
+          </svg>
+          <p class="add-title">Drop a photo of your work</p>
+          <p class="add-sub">image or PDF &mdash; one page, or several. You can paste too.</p>
+          <div class="add-actions">
+            <button class="ws-btn" type="button" data-act="attach">Choose a file</button>
+            <button class="ws-btn" type="button" data-act="camera">Camera</button>
+            <button class="ws-btn" type="button" data-act="voice">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>Dictate
+            </button>
+          </div>
+          <div class="add-drop-hint">Drop to add</div>
+        </div>
+
         <ul class="chat-atts"></ul>
-        <p class="chat-label">Upload your work</p>
 
         <div class="chat-pill">
-          <button class="pill-act" type="button" data-act="attach" title="Attach" aria-label="Attach an image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7.5-7.5"/></svg></button>
-          <button class="pill-act" type="button" data-act="voice" title="Dictate" aria-label="Dictate"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
-          <button class="pill-act" type="button" data-act="camera" title="Camera" aria-label="Camera"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
           <textarea class="chat-text" rows="1" placeholder="Type, or ask a question"></textarea>
         </div>
-        <div class="chat-drop-hint">Drop to attach</div>
       </div>
 
       <div class="ws-notice" id="ws-notice" hidden></div>
