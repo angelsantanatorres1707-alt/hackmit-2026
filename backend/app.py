@@ -417,6 +417,16 @@ def get_fixtures() -> dict:
     return {"fixtures": extract_mod.list_fixtures(), "fixture_mode": extract_mod.use_fixture_mode()}
 
 
+def _vision_health() -> dict:
+    """Never let a health check be the thing that raises."""
+    try:
+        from . import vision_providers
+
+        return vision_providers.describe()
+    except Exception as exc:  # pragma: no cover
+        return {"active": None, "available": [], "problem": str(exc)}
+
+
 @app.get("/api/health")
 def health() -> dict:
     templates = render_mod.available_templates()
@@ -425,6 +435,9 @@ def health() -> dict:
         "fixture_mode": extract_mod.use_fixture_mode(),
         "api_key_present": extract_mod.have_api_key(),
         "model": extract_mod.MODEL,
+        # Which vision API a photo would actually reach, and why not, if not.
+        # "it silently used a fixture" is the failure this answers in one curl.
+        "vision": _vision_health(),
         "fixtures": [f["name"] for f in extract_mod.list_fixtures()],
         "scene_templates": templates,
         "render_quality": render_mod.QUALITY,

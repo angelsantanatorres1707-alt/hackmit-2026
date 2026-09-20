@@ -63,11 +63,23 @@ def use_fixture_mode() -> bool:
         return True
     if _flag("USE_FIXTURE_OFF"):
         return False
-    return not bool(os.environ.get("ANTHROPIC_API_KEY"))
+    return not have_api_key()
 
 
 def have_api_key() -> bool:
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    """A key for ANY supported vision provider, not just Anthropic.
+
+    A team on a free tier sets GEMINI_API_KEY instead; treating that as "no key"
+    would silently drop them back into fixture mode and hand them a canned
+    sample in place of their own photograph.
+    """
+    return bool(
+        os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+        or os.environ.get("OPENROUTER_API_KEY")
+    )
 
 
 # --------------------------------------------------------------------------
@@ -187,6 +199,29 @@ class Extraction(BaseModel):
     steps: list[Step] = Field(default_factory=list)
     final_answer: FinalAnswer = Field(default_factory=FinalAnswer)
     extraction: ExtractionMeta = Field(default_factory=ExtractionMeta)
+
+
+def _free_tier_user_prompt() -> str:
+    """The user turn for providers without structured-output support.
+
+    Anthropic is handed the schema through the SDK and never sees this. Gemini
+    and OpenRouter only guarantee "some JSON", so the shape has to be stated in
+    the prompt, and the transcriber-not-solver rule has to be repeated here:
+    it is the instruction most likely to be lost when the schema takes up most
+    of the context.
+    """
+    schema = json.dumps(Extraction.model_json_schema(), separators=(",", ":"))
+    return (
+        "Transcribe the handwritten work in the image(s) into JSON matching this "
+        "schema exactly. Output ONLY the JSON object, with no prose and no "
+        "markdown fence.\n\n"
+        f"SCHEMA:\n{schema}\n\n"
+        "Remember: record what is ON THE PAGE, mistakes included. Do not correct "
+        "arithmetic, do not solve the problem, do not skip a step because it is "
+        "wrong. A step you silently fix is a step the student never gets to "
+        "learn from. Set parse_ok=false and confidence low rather than guessing, "
+        "and list every digit you are unsure of in `ambiguities`."
+    )
 
 
 class ExtractionError(RuntimeError):
@@ -577,6 +612,25 @@ def _image_blocks(images: list[bytes]) -> tuple[list[dict], list[tuple[int, int]
 
 
 def _call_api(images: list[bytes]) -> tuple[Extraction, dict[str, Any]]:
+    # A team without a card on file can run this on a free tier instead; see
+    # backend/vision_providers.py. Anthropic keeps its own path below because it
+    # is the only one with real structured-output support.
+    from . import vision_providers
+
+    try:
+        provider = vision_providers.active_provider()
+    except vision_providers.ProviderError as exc:
+        raise ExtractionError(str(exc)) from exc
+
+    if provider and provider != "anthropic":
+        try:
+            raw, meta = vision_providers.extract_json(
+                images, EXTRACTION_SYSTEM, _free_tier_user_prompt(), provider
+            )
+        except vision_providers.ProviderError as exc:
+            raise ExtractionError(str(exc)) from exc
+        return Extraction.model_validate(raw), meta
+
     try:
         import anthropic
     except ImportError as exc:  # pragma: no cover
