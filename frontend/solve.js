@@ -630,7 +630,6 @@
     if (!job) return;
 
     renderWarnings(job);
-    renderSteps(job);
 
     if (job.hint) {
       $('#viz-hint').hidden = false;
@@ -709,18 +708,11 @@
     });
   }
 
-  function renderSteps(job) {
-    var ol = $('#viz-steps');
-    ol.textContent = '';
-    (job.steps || []).forEach(function (st, i) {
-      var li = document.createElement('li');
-      li.className = 'viz-step' + (i === job.first_error_index ? ' located' : '');
-      var lbl = document.createElement('span'); lbl.className = 'lbl'; lbl.textContent = st.label || (i + 1) + ')';
-      var raw = document.createElement('span'); raw.className = 'raw'; raw.textContent = st.raw_text || '';
-      li.appendChild(lbl); li.appendChild(raw);
-      ol.appendChild(li);
-    });
-  }
+
+  /* The read-back list used to sit under the video, reprinting every step
+     the student had just written. They are looking at a video of their own
+     work; a transcript of it underneath is noise. The hint above the fold --
+     what actually went wrong -- is the part worth keeping. */
 
   /* ── the work box is a dropzone, the way step 1's is ───────────────── */
 
