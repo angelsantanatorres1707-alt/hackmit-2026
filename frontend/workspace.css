@@ -11,7 +11,7 @@
 .ws-body {
   min-height: 100vh;
   display: flex; flex-direction: column;
-  background: var(--bg-2);
+  background: var(--bg);
 }
 
 /* ── top bar ─────────────────────────────────────────────────────────── */
@@ -28,19 +28,16 @@
 /* ── the two panes ───────────────────────────────────────────────────── */
 .ws {
   flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
-  gap: 16px; padding: 16px 16px 20px; align-items: start;
+  gap: 48px; padding: 24px 32px 40px; align-items: start;
 }
 @media (max-width: 920px) { .ws { grid-template-columns: 1fr; } }
 
 .pane {
-  background: var(--bg); border: 1px solid var(--line);
-  border-radius: var(--radius-lg); overflow: hidden;
   display: flex; flex-direction: column; min-width: 0;
 }
 .pane-head {
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  padding: 12px 18px; border-bottom: 1px solid var(--line-soft);
-  background: var(--panel-2);
+  padding: 0 0 12px; border-bottom: 1px solid var(--line-soft);
 }
 .pane-title {
   display: inline-flex; align-items: center; gap: 10px;
@@ -52,7 +49,7 @@
   font-size: 0.8rem; font-weight: 500; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--dim); white-space: nowrap;
 }
-.pane-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pane-body { padding: 18px 0 0; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
 /* ── dropzone ────────────────────────────────────────────────────────── */
 .ws-drop {
@@ -110,7 +107,7 @@
 .ws-notice b { color: #5A3F00; }
 
 /* ── composer ────────────────────────────────────────────────────────── */
-.composer { border-top: 1px solid var(--line-soft); padding: 14px 18px 18px; margin-top: auto; }
+.composer { border-top: 1px solid var(--line-soft); padding: 18px 0 0; margin-top: auto; }
 .composer-head { display: flex; align-items: center; margin-bottom: 12px; }
 .composer-modes { display: inline-flex; gap: 4px; background: var(--panel-2); border-radius: 999px; padding: 4px; }
 .mode {
@@ -168,8 +165,8 @@
 /* ── samples ─────────────────────────────────────────────────────────── */
 .ws-samples {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 14px 18px; border-top: 1px solid var(--line-soft);
-  background: var(--panel-2); color: var(--muted); font-size: 0.93rem;
+  padding: 18px 0 0; border-top: 1px solid var(--line-soft);
+  color: var(--muted); font-size: 0.93rem;
 }
 .ws-chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .ws-sample {
