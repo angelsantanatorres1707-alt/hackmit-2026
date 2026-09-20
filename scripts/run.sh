@@ -27,6 +27,17 @@ if ! "$VENV/bin/python" -c "import fastapi, uvicorn" 2>/dev/null; then
   exit 1
 fi
 
+# Load .env if present, so a key is set once rather than re-exported in every
+# shell. It is gitignored; see .env.example. Existing environment variables win,
+# so `OPENAI_API_KEY=... bash scripts/run.sh --live` still overrides the file.
+if [ -f "$REPO_ROOT/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$REPO_ROOT/.env"
+  set +a
+  echo "==> loaded .env"
+fi
+
 MODE="fixture"
 RELOAD="0"
 for arg in "$@"; do

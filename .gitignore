@@ -5,3 +5,10 @@ media/
 .cache/
 renders/
 *.log
+
+# Secrets. A key belongs in your shell or here, never in a tracked file.
+.env
+.env.*
+!.env.example
+*.key
+secrets.json
