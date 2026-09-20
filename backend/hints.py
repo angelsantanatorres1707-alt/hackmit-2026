@@ -719,10 +719,17 @@ def _grid_order(verdict, ext, env, S, C):
     a, b = _rows(A), _rows(B)
     if not (_is_2x2(A) and _is_2x2(B) and _finite(a) and _finite(b) and _det_ok(a) and _det_ok(b)):
         return _grid_single(verdict, ext, env, S, C)
+    # Stages are APPLIED in order, so [X, Y] draws the composite Y*X. Which
+    # order belongs in the student's panel is decided by which one reproduces
+    # the value they actually wrote -- not by the order they LABELLED it with.
+    # A student who writes "BAv" and computes A(Bv) has the two the other way
+    # round from one who writes "AB" and computes BA, and guessing from the
+    # label alone puts the correct order under "WHAT YOU WROTE".
+    stages = _order_matching(env, S, a, b) or [a, b]
+    other = [b, a] if stages == [a, b] else [a, b]
     return "GridTransformCompare", {
-        # stages are APPLIED in order: the student's product BA means A first.
-        "student_stages": [a, b],
-        "correct_stages": [b, a],
+        "student_stages": stages,
+        "correct_stages": other,
         "student_display": _display(S),
         "correct_display": _display(C),
         "stage_labels": ["first", "then"],
@@ -730,6 +737,42 @@ def _grid_order(verdict, ext, env, S, C):
         "pause_between_stages": 0.8,
         "track_vectors": [[1, 0], [0, 1]],
     }
+
+
+def _order_matching(env, S, a, b):
+    """Which stage order actually reproduces the student's written value?"""
+    rows = _rows(S)
+    if not rows:
+        return None
+    try:
+        A, B = sp.Matrix(a), sp.Matrix(b)
+        Sm = sp.Matrix(rows)
+    except Exception:
+        return None
+    options = [([a, b], B * A), ([b, a], A * B)]
+    for stages, comp in options:
+        try:
+            if comp.shape == Sm.shape and sp.simplify(comp - Sm).is_zero_matrix:
+                return stages
+        except Exception:  # noqa: BLE001
+            continue
+    # The claim may be the IMAGE of a given vector rather than the matrix.
+    vec = None
+    for name in ("v", "x", "u", "w"):
+        got = _flat(env.get(name))
+        if got:
+            vec = sp.Matrix(got)
+            break
+    if vec is None:
+        return None
+    target = Sm.T if Sm.rows == 1 else Sm
+    for stages, comp in options:
+        try:
+            if comp.shape[1] == vec.rows and sp.simplify(comp * vec - target).is_zero_matrix:
+                return stages
+        except Exception:  # noqa: BLE001
+            continue
+    return None
 
 
 def _grid_roundtrip(verdict, ext, env, S, C):

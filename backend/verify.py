@@ -900,6 +900,23 @@ def _coordinate_target(step: Step, env: dict[str, Val]) -> Optional[Val]:
 _EXPR_CHARS = re.compile(r"^[0-9A-Za-z_+\-*/^().\s]+$")
 
 
+def _as_columns(env: dict[str, Val]) -> Optional[dict[str, Val]]:
+    """The same givens with every UNORIENTED row vector stood up as a column."""
+    out: dict[str, Val] = {}
+    changed = False
+    for k, val in env.items():
+        try:
+            if (val is not None and val.is_matrix and _loose(val)
+                    and val.obj.rows == 1 and val.obj.cols > 1):
+                out[k] = Val(val.kind, val.obj.T, "column", val.wrote_decimals)
+                changed = True
+                continue
+        except Exception:  # noqa: BLE001
+            pass
+        out[k] = val
+    return out if changed else None
+
+
 def _lhs_expression(step: Step, env: dict[str, Val]) -> Optional[str]:
     """The left-hand side of a written line, when it is an expression over the
     givens and not merely a name for the answer.
@@ -913,13 +930,25 @@ def _lhs_expression(step: Step, env: dict[str, Val]) -> Optional[str]:
     lhs = text.split("=", 1)[0].strip()
     if not lhs or len(lhs) > 60 or not _EXPR_CHARS.match(lhs):
         return None
-    names = [t for t in re.findall(r"[A-Za-z_][A-Za-z_0-9]*", lhs)]
-    if not names or not all(n in env for n in names):
+    names = re.findall(r"[A-Za-z_][A-Za-z_0-9]*", lhs)
+    if not names:
         return None
-    if len(names) == 1 and lhs == names[0]:
+    # "BAv" is B then A then v, the same convention _symbols_in_text uses.
+    # Without this the token was looked up whole, found in nothing, and the
+    # line went unchecked -- which is how "BAv = (0,1)" passed on a page where
+    # the student had actually computed ABv and mislabelled it.
+    factors: list[str] = []
+    for n in names:
+        if n in env:
+            factors.append(n)
+        elif len(n) > 1 and all(ch in env for ch in n):
+            factors.extend(n)
+        else:
+            return None
+    if len(factors) == 1 and lhs == names[0]:
         return None                      # "A = [...]", a restatement
-    if not re.search(r"[+\-*/^]|\d", lhs):
-        return None                      # no operation and no weight: nothing to evaluate
+    if len(factors) < 2 and not re.search(r"[+\-*/^]|\d", lhs):
+        return None                      # nothing to evaluate
     return lhs
 
 
@@ -939,7 +968,20 @@ def expected_for(step: Step, env: dict[str, Val], topic: str) -> tuple[Optional[
     # multiplication; it just was not being given the text.
     lhs = _lhs_expression(step, env)
     if lhs:
-        obj = eval_expr(lhs, env)
+        obj = None
+        try:
+            obj = eval_expr(lhs, env)
+        except ShapeMismatch:
+            # "(1,1)" on the page says nothing about row versus column, and the
+            # extractor had to store it one way round. That stored guess must
+            # not become a shape error the student never made -- Bv on a v the
+            # extractor happened to store as a row would blame a correct line.
+            lenient = _as_columns(env)
+            if lenient is not None:
+                try:
+                    obj = eval_expr(lhs, lenient)
+                except Exception:  # noqa: BLE001
+                    obj = None
         if obj is not None:
             return wrap(obj), f"evaluated {lhs!r} from the givens"
 
@@ -1788,8 +1830,16 @@ def check_concept_claims(ext, env: dict) -> Optional[tuple]:
     return None
 
 
-def _concept_signature(step, env: dict) -> Optional[str]:
+def _concept_signature(step, env: dict, claimed: Optional[Val] = None) -> Optional[str]:
     """A misconception name for a step the numeric check already blamed."""
+    # The value they wrote is what the SAME product would give with its matrix
+    # factors the other way round: they applied the maps in the opposite order
+    # to the one they labelled.
+    if claimed is not None:
+        swapped = _swapped_order_value(step, env)
+        if swapped is not None and compare(swapped, claimed) in ("eq", "rounding"):
+            return "LA02"
+
     text = " ".join(filter(None, [step.raw_text or "", step.claimed_expression or "",
                                   getattr(step.value, "text", "") or ""]))
     if not text.strip():
@@ -1797,6 +1847,38 @@ def _concept_signature(step, env: dict) -> Optional[str]:
     basis, target = _basis_family(env)
     if basis is not None and _COORD_CLAIM.search(text):
         return "LA29"
+    return None
+
+
+def _swapped_order_value(step, env: dict) -> Optional[Val]:
+    """The same juxtaposed product, with its square factors in reverse order."""
+    lhs = _lhs_expression(step, env)
+    if not lhs or re.search(r"[+\-/^]", lhs):
+        return None
+    factors: list[str] = []
+    for n in re.findall(r"[A-Za-z_][A-Za-z_0-9]*", lhs.replace("*", "")):
+        if n in env:
+            factors.append(n)
+        elif len(n) > 1 and all(ch in env for ch in n):
+            factors.extend(n)
+        else:
+            return None
+    square = [i for i, n in enumerate(factors)
+              if env[n] is not None and env[n].is_matrix
+              and env[n].obj.rows > 1 and env[n].obj.cols > 1]
+    if len(square) < 2:
+        return None
+    order = list(factors)
+    for i, j in zip(square, reversed(square)):
+        order[i] = factors[j]
+    for scope in (env, _as_columns(env) or env):
+        try:
+            out = scope[order[0]].obj
+            for n in order[1:]:
+                out = out * scope[n].obj
+            return wrap(out)
+        except Exception:  # noqa: BLE001
+            continue
     return None
 
 
@@ -2066,7 +2148,7 @@ def verify(ext: Extraction) -> Verdict:
         # The arithmetic check already found the right LINE; this names the
         # misconception behind it, so the hint can talk about the idea rather
         # than saying "watch the highlighted part".
-        error_id = _concept_signature(step, envs[0])
+        error_id = _concept_signature(step, envs[0], first.claimed)
     verdict.error_id = error_id
 
     # §4.5 forward propagation: is this the only error, or the first of several?
