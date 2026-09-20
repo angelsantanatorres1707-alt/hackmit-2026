@@ -553,7 +553,10 @@
   function runFixture(name, title) {
     if (S.busy) return;
     S.files = [];
-      log('you', 'Run the bundled sample: ' + title, true);
+    // The fixture's own title names the mistake it contains, which is why the
+    // labelled sample chips were removed. Log something neutral instead: the
+    // animation has to be what reveals the error.
+    log('you', title || 'Walk me through a worked example', true);
     start(api('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -879,8 +882,37 @@
   }
 
 
+  /* ── the worked example ────────────────────────────────────────────────
+   *
+   * The one path to the payoff that needs no photo, no API key and no wifi.
+   * Picks a bundled sample without ever naming the mistake inside it.
+   */
+  function wireSample() {
+    var btn = $('#ws-sample');
+    if (!btn) return;
+
+    var pool = [];
+    var next = 0;
+
+    api('/api/fixtures').then(function (r) {
+      pool = (r.fixtures || []).map(function (f) { return f.name; });
+    }).catch(function () {
+      pool = [];                       // the fallback below still works
+    });
+
+    btn.addEventListener('click', function () {
+      if (S.busy) return;
+      // Cycle rather than randomise, so a second click shows something new.
+      var name = pool.length ? pool[next++ % pool.length] : 'la09_eigen';
+      if (workBox) workBox.clear();
+      runFixture(name, 'Walk me through a worked example');
+    });
+  }
+
+
   /* ── go ────────────────────────────────────────────────────────────── */
 
+  wireSample();
   wireSlides();
   wireWorkZone();
   wireTransport();
