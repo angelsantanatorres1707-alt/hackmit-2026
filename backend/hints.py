@@ -236,6 +236,10 @@ HINTS: dict[str, tuple[str, str]] = {
     "LA27": ("How many solutions there are is settled by how many independent conditions "
              "the rows really impose, against how many unknowns there are. Compare those "
              "two counts in {step}.", "compare conditions against unknowns"),
+    "LA30": ("Every Ax you can possibly form is a combination of A's own columns, so "
+             "the reachable set is only as big as the columns are different from each "
+             "other. Watch how much of the plane stays dark, and where b sits, in "
+             "{step}.", "watch how much stays dark, and where b sits"),
     "LA28": ("A vector can sit on an eigen-line and still belong to a different "
              "stretch. Watch how far along its own line {step} sends it, against how "
              "far the eigenvalue you paired it with would.",
@@ -521,6 +525,7 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
         "LA29": _span_rebuild,
         "LA12": _line_system, "LA13": _line_system,
         "LA14": _span, "LA15": _span,
+        "LA30": _column_space,
     }.get(eid or "", _grid_single)
 
     full, short = HINTS.get(eid or "", GENERIC_ANY)
@@ -1033,6 +1038,40 @@ def _span(verdict, ext, env, S, C):
         "vectors": vecs, "claimed_dim": claimed_dim, "actual_dim": actual,
         "probe": probe, "ambient": ambient,
         "student_label": "YOUR CLAIM", "correct_label": "WHAT IS REACHED",
+    }
+
+
+def _column_space(verdict, ext, env, S, C):
+    """LA30: everything Ax can reach is a combination of A's COLUMNS.
+
+    Reuses the span sweep, fed from the matrix rather than from a loose list of
+    vectors: the columns are the vectors, and b is the probe that is already
+    known to be out of reach -- which is exactly why the system has no
+    solution, shown rather than said.
+    """
+    A = env.get("A") or env.get("M")
+    bv = env.get("b")
+    if A is None or not A.is_matrix or bv is None or not bv.is_matrix:
+        raise SceneUnavailable("no A and b to draw a column space from")
+    M = A.obj
+    ambient = int(M.rows)
+    if ambient not in (2, 3):
+        raise SceneUnavailable("only 2D and 3D column spaces are drawable")
+    cols = [[real(x) for x in M.col(j)] for j in range(M.cols)]
+    cols = [c for c in cols if c and not any(x is None for x in c)]
+    if not (1 <= len(cols) <= 3):
+        raise SceneUnavailable("between one and three columns are drawable")
+    probe = _flat(bv)
+    if not probe or len(probe) != ambient:
+        raise SceneUnavailable("b is not a drawable vector of the right size")
+    actual = int(sp.Matrix.hstack(*[sp.Matrix(c) for c in cols]).rank())
+    if actual >= ambient:
+        raise SceneUnavailable("the columns already reach everything; nothing is missed")
+    return "SpanCompare", {
+        "vectors": cols, "claimed_dim": ambient, "actual_dim": actual,
+        "probe": probe, "ambient": ambient,
+        "student_label": "WHAT YOU ASSUMED A REACHES",
+        "correct_label": "WHAT A ACTUALLY REACHES",
     }
 
 

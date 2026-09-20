@@ -71,6 +71,9 @@ CODES: dict[str, str] = {
     "LA28": "a genuine eigenvector paired with the wrong eigenvalue",
     "LA29": "coordinates in a basis read off as the vector's own entries instead of "
             "the weights that rebuild it",
+    "LA30": "a misunderstanding of SPAN -- assuming Ax can reach anywhere in the ambient "
+            "space when A's columns are dependent, so the column space is only a line "
+            "(or plane) and b lies off it",
 }
 
 SYSTEM = """\

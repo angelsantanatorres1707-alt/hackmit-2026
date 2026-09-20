@@ -1631,6 +1631,22 @@ def _isometry(A) -> Optional[bool]:
         return None
 
 
+def _columns_miss(env: dict) -> bool:
+    """Do A's columns fail to reach the whole ambient space?
+
+    This is the difference between "you miscounted the free variables" and
+    "the columns of A only span a line, and b is not on it" -- the second has
+    a picture, and it is the one students actually need.
+    """
+    A = env.get("A") or env.get("M")
+    if A is None or not A.is_matrix:
+        return False
+    try:
+        return int(A.obj.rank()) < int(A.obj.rows)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _solution_counts(env: dict):
     """-> (no_solution, infinitely_many, unique) for Ax = b, or None."""
     A = env.get("A") or env.get("M")
@@ -1900,9 +1916,14 @@ def check_property_claims(ext, env: dict) -> Optional[tuple]:
             # "Ax = b has a solution" / "the system is consistent". Without this
             # the most common way of all to state the conclusion matched none of
             # the patterns above and the page walked free.
+            #
+            # LA30 when the columns do not reach the whole space: that is a
+            # different lesson from miscounting free variables, and it has a
+            # picture -- the reachable set collapses to a line and b is off it.
             (re.compile(r"\bhas\s+(?:a|at\s+least\s+one)\s+solution\b"
                         r"|\bis\s+consistent\b|\bis\s+solvable\b", re.I),
-             "LA27", "that the system has a solution", lambda: not none_, True),
+             "LA30" if _columns_miss(env) else "LA27",
+             "that the system has a solution", lambda: not none_, True),
         ]
 
     steps = sorted(ext.steps, key=lambda st: (st.page, st.reading_order))

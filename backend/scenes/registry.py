@@ -217,7 +217,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "scene": "SpanCompare",
         "priority": "P2",
         "duration": 11.3,
-        "covers": ["LA15", "LA14(3D, P2)"],
+        "covers": ["LA15", "LA14(3D, P2)", "LA30"],
         "summary": "Paint every point the combinations reach, then fail to "
                    "reach a probe that is verified out of reach.",
         "param_schema": {
