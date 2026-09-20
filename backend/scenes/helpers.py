@@ -40,6 +40,7 @@ from manim import (
     Scene,
     Text,
     Transform,
+    UpdateFromAlphaFunc,
     VGroup,
     VMobject,
     Write,
@@ -1002,6 +1003,95 @@ class VecArrow:
         return self.panel.pt(self.vec)
 
 
+def _clip_segment(p0, p1, lo, hi):
+    """Liang-Barsky: trim a segment to an axis-aligned box.
+
+    Returns the trimmed endpoints, or None when the segment misses the box
+    entirely. Exact, and cheap enough to run per line per frame.
+    """
+    d = p1 - p0
+    t0, t1 = 0.0, 1.0
+    for axis in (0, 1):
+        if abs(d[axis]) < 1e-12:
+            # Parallel to this pair of edges: either wholly inside or wholly out.
+            if p0[axis] < lo[axis] or p0[axis] > hi[axis]:
+                return None
+            continue
+        for sign, bound in ((-1.0, lo[axis]), (1.0, hi[axis])):
+            num = (bound - p0[axis]) * sign
+            den = d[axis] * sign
+            t = num / den
+            if den < 0:              # entering
+                if t > t1:
+                    return None
+                t0 = max(t0, t)
+            else:                    # leaving
+                if t < t0:
+                    return None
+                t1 = min(t1, t)
+    if t1 - t0 < 1e-9:
+        return None
+    return p0 + t0 * d, p0 + t1 * d
+
+
+def clipped_matrix_anim(panel_: Panel, M, *, run_time: float,
+                        pad: float = 0.012):
+    """``ApplyMatrix`` on a plane, with every grid line clipped to the panel.
+
+    ``ApplyMatrix`` alone carries the lattice far outside the box, and cairo
+    has no clipping primitive, so the old fix was an opaque matte with a hole
+    per panel plus a shield between the two planes. A shield can only be drawn
+    on ONE side of the tie, so the reference panel stayed clean and the
+    student's panel filled up with the reference panel's grid lines -- which is
+    exactly what a viewer notices.
+
+    A linear map sends segments to segments, so clip them instead of hiding
+    them: interpolate M, transform each line's endpoints about the origin, trim
+    the result to the box, and write it back. Exact in both directions, and no
+    painter's-algorithm tie to lose.
+
+    Lines that fall entirely outside become transparent rather than
+    zero-length, because ``put_start_and_end_on`` cannot place a degenerate
+    segment.
+    """
+    M = np.asarray(M, dtype=float)
+    A = np.eye(3)
+    A[:2, :2] = M[:2, :2]
+    origin = np.array(panel_.origin, dtype=float)
+
+    half = np.array([panel_.box.width / 2 - pad, panel_.box.height / 2 - pad, 0.0])
+    centre = np.array(panel_.box.get_center(), dtype=float)
+    lo, hi = centre - half, centre + half
+
+    # Snapshot the untransformed geometry once. Reading it back each frame
+    # would compound the clipping, eroding the grid a little more every frame.
+    segments = []
+    for sub in panel_.plane.family_members_with_points():
+        pts = sub.points
+        if len(pts) != 4:
+            continue              # not a plain segment (ticks, labels)
+        segments.append((sub, pts[0].copy(), pts[-1].copy(),
+                         sub.get_stroke_opacity()))
+
+    def update(_mob, alpha: float) -> None:
+        At = np.eye(3) + alpha * (A - np.eye(3))
+        for sub, p0, p1, opacity in segments:
+            q0 = origin + At @ (p0 - origin)
+            q1 = origin + At @ (p1 - origin)
+            trimmed = _clip_segment(q0, q1, lo, hi)
+            if trimmed is None:
+                sub.set_stroke(opacity=0)
+                continue
+            a, b = trimmed
+            if np.linalg.norm(b - a) < 1e-6:
+                sub.set_stroke(opacity=0)
+                continue
+            sub.set_stroke(opacity=opacity)
+            sub.put_start_and_end_on(a, b)
+
+    return UpdateFromAlphaFunc(panel_.plane, update, run_time=run_time)
+
+
 def apply_matrix_anims(panel_: Panel, M, arrows: Iterable[VecArrow], *,
                        run_time: float, extra: Sequence = ()) -> list:
     """``ApplyMatrix`` on the plane + ``Transform`` on each arrow.
@@ -1015,7 +1105,10 @@ def apply_matrix_anims(panel_: Panel, M, arrows: Iterable[VecArrow], *,
         so the head stays crisp instead of shearing into a bent wedge.
     """
     M = np.asarray(M, dtype=float)
-    anims = [ApplyMatrix(M, panel_.plane, about_point=panel_.origin, run_time=run_time)]
+    # Clipped rather than raw ApplyMatrix: see clipped_matrix_anim. The lattice
+    # now stops at its own box in BOTH panels, instead of the reference panel's
+    # lines showing up inside the student's.
+    anims = [clipped_matrix_anim(panel_, M, run_time=run_time)]
     for a in arrows:
         new_vec, tgt = a.target(M)
         anims.append(Transform(a.mob, tgt, run_time=run_time))

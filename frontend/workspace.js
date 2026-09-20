@@ -84,25 +84,16 @@
   function loadHealth() {
     api('/api/health').then(function (h) {
       S.fps = FPS_BY_QUALITY[h.render_quality] || 30;
-      $('#viz-badge').textContent =
-        (h.render_quality || 'manim').replace('_quality', '') + ' \u00b7 ' + S.fps + ' fps';
-    }).catch(function () { /* the badge keeps its default; nothing else depends on it */ });
+      // The quality/fps badge was removed by request -- render settings are our
+      // business, not the viewer's. S.fps is still needed by the frame counter.
+    }).catch(function () { /* S.fps keeps its default; nothing else depends on it */ });
   }
 
-  function loadSamples() {
-    api('/api/fixtures').then(function (d) {
-      var row = $('#ws-samples');
-      (d.fixtures || []).forEach(function (f) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'ws-sample';
-        b.textContent = f.title || f.name;
-        b.title = f.expect || '';
-        b.addEventListener('click', function () { runFixture(f.name, f.title || f.name); });
-        row.appendChild(b);
-      });
-    }).catch(function () { /* samples are a convenience, not the product */ });
-  }
+  // The sample chips were removed: each one was labelled with the mistake it
+  // contained ("multiplication order reversed"), so the picker gave away the
+  // answer before the animation had a chance to show it. runFixture() is kept
+  // -- /api/fixtures still serves them, so a sample can be triggered from the
+  // console or wired to a single unlabelled button if one is wanted back.
 
   /* ── files ─────────────────────────────────────────────────────────── */
 
@@ -569,5 +560,4 @@
   wireCamera();
   renderFiles();
   loadHealth();
-  loadSamples();
 })();
