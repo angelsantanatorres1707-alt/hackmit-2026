@@ -218,6 +218,24 @@ HINTS: dict[str, tuple[str, str]] = {
              "squarely in {step}.", "watch whether the leftover meets it squarely"),
     "LA21": ("A projection leaves behind something square to the whole plane. Watch whether "
              "yours does, in {step}.", "watch the corner where it lands"),
+    # Property claims: the numbers were right and the conclusion was not.
+    "LA22": ("Equal lengths are not the same as equal angles. Watch what happens to the "
+             "square corner between the two basis arrows in {step}.",
+             "watch the corner between the arrows"),
+    "LA23": ("Watch how long the basis arrows are after the map, against how long they "
+             "started, in {step}.", "watch the arrows change length"),
+    "LA24": ("Applying one map and then the other is not the same journey as applying "
+             "them the other way round. Watch the plane under each order in {step}.",
+             "watch each order in turn"),
+    "LA25": ("A map that squashes the plane flat has no way back: nothing can unsquash "
+             "it. Watch what your matrix does to the area of the unit square in {step}.",
+             "watch the area it leaves behind"),
+    "LA26": ("Square to each other is a statement about the dot product, not about the "
+             "lengths. Look again at the product you formed in {step}.",
+             "look again at the dot product"),
+    "LA27": ("How many solutions there are is settled by how many independent conditions "
+             "the rows really impose, against how many unknowns there are. Compare those "
+             "two counts in {step}.", "compare conditions against unknowns"),
 }
 
 GENERIC_BASIS = ("Watch where the {which} basis vector lands in {step}.",
@@ -490,6 +508,8 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
         "LA09": _eigen_vector, "LA10": _eigen_value,
         "LA11": _vector_op, "LA17": _vector_op, "LA19": _vector_op,
         "LA20": _vector_op, "LA21": _vector_op,
+        "LA22": _angle_property, "LA23": _angle_property,
+        "LA24": _grid_order,
         "LA12": _line_system, "LA13": _line_system,
         "LA14": _span, "LA15": _span,
     }.get(eid or "", _grid_single)
@@ -628,6 +648,7 @@ _TITLES = {
     "LineSystemCompare": "{ref}, as lines in the plane",
     "SpanCompare": "{ref}, and everything it reaches",
     "StaticStepHighlight": "{ref}",
+    "AnglePreservationCheck": "Your transformation, applied to the corner",
 }
 
 
@@ -868,6 +889,42 @@ def _parallel(a: list[float], b: list[float]) -> bool:
         return sp.Matrix.hstack(sp.Matrix(a), sp.Matrix(b)).rank() <= 1
     except Exception:
         return False
+
+
+def _angle_property(verdict, ext, env, S, C):
+    """LA22/LA23 -- every number is right and the conclusion is not.
+
+    There is no student value to contrast here, so the comparison templates
+    have nothing to draw. What can be drawn is the claim itself: the basis,
+    and what the student's own map does to the corner (LA22) or to the lengths
+    (LA23).
+    """
+    a, b = _images(env)
+    if a is None or b is None:
+        raise SceneUnavailable("no 2D map given by where the basis vectors land")
+    if abs(a[0] * b[1] - a[1] * b[0]) < 1e-9:
+        raise SceneUnavailable("the two images are parallel; there is no corner to watch close")
+    if max(abs(x) for x in a + b) > 6.0:
+        raise SceneUnavailable("the images are too long to draw beside a unit square")
+    return "AnglePreservationCheck", {
+        "e1_image": a, "e2_image": b,
+        "show": "length" if verdict.error_id == "LA23" else "angle",
+    }
+
+
+def _images(env: dict):
+    """Where e1 and e2 land, from either spelling: the givens may name the
+    images directly, or give the matrix whose COLUMNS they are."""
+    a, b = _flat(env.get("T(e1)")), _flat(env.get("T(e2)"))
+    if not (a and b):
+        rows = _rows(_subject(env))
+        if rows and len(rows) == 2 and all(len(r) == 2 for r in rows):
+            a, b = [rows[0][0], rows[1][0]], [rows[0][1], rows[1][1]]
+    if not a or not b or len(a) != 2 or len(b) != 2:
+        return None, None
+    if not all(abs(x) < 1e6 for x in a + b):
+        return None, None
+    return a, b
 
 
 def _line_system(verdict, ext, env, S, C):

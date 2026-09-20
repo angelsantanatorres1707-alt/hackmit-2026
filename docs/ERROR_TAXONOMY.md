@@ -464,6 +464,78 @@ subspace, so it is not the orthogonal projection.
 
 ---
 
+## Property claims — the sentence is wrong, every number is right
+
+LA22 onwards are a different species. The student computes correctly and then draws a
+conclusion that does not follow. There is no wrong value to contrast and nothing to
+withhold, so these are checked by `check_property_claims()` in `verify.py` — a pattern for
+how the claim is written, plus the computation that settles it — and they run only when
+nothing numeric is wrong. A claim we cannot settle is left alone rather than guessed at,
+and a claim the student **denies** ("T does not preserve angles") is tested as the denial.
+
+### LA22 — "it preserves angles" when it does not
+**Topic:** transformations · **Visual:** strong
+
+- **Student writes:** `T(e₁)=(2,1)`, `T(e₂)=(1,2)`, "both have length √5, so T preserves angles"
+- **Why it is wrong:** equal lengths on the basis say nothing about the angle between the
+  images. `(2,1)·(1,2) = 4 ≠ 0`, so the right angle is gone.
+- **Check:** `AᵀA` is not a positive multiple of `I`, where the images are A's columns
+- **Scene:** `AnglePreservationCheck` — the unit basis with a right-angle square between it,
+  carried through the student's own map, so the square visibly collapses into an acute wedge
+- **Hint:** "Equal lengths are not the same as equal angles. Watch what happens to the square
+  corner between the two basis arrows."
+
+### LA23 — "it preserves lengths" when it does not
+**Topic:** transformations · **Visual:** strong
+
+- **Check:** `AᵀA ≠ I`
+- **Scene:** `AnglePreservationCheck` with `show="length"` — a ghost unit circle stays put
+  while the transformed tips leave it
+- **Hint:** "Watch how long the basis arrows are after the map, against how long they started."
+
+### LA24 — "AB = BA"
+**Topic:** matrix_multiply · **Visual:** strong
+
+- **Check:** `AB - BA` is not the zero matrix
+- **Scene:** `GridTransformCompare`, the two orders side by side (the LA02 picture)
+- **Hint:** "Applying one map and then the other is not the same journey as applying them the
+  other way round."
+
+### LA25 — "A is invertible" (or "singular") when it is not
+**Topic:** inverse · **Visual:** medium
+
+Both directions are tested: "is invertible / has an inverse / is nonsingular" against
+`det ≠ 0`, and "is singular / is not invertible / has no inverse" against `det = 0`.
+
+- **Check:** `det(A) == 0` for the first, `det(A) != 0` for the second
+- **Scene:** `StaticStepHighlight` (no bespoke picture yet — a collapsing unit square is the
+  obvious one)
+- **Hint:** "A map that squashes the plane flat has no way back."
+
+### LA26 — "u and v are orthogonal" when `u·v ≠ 0`
+**Topic:** vectors · **Visual:** medium
+
+Fires only when exactly two vectors are in scope, and never on a page that mentions a
+projection — "the orthogonal projection of b" is not a claim that two things are
+perpendicular, and projection pages say it constantly.
+
+- **Check:** `u.dot(v) != 0`
+- **Scene:** `StaticStepHighlight`
+- **Hint:** "Square to each other is a statement about the dot product, not about the lengths."
+
+### LA27 — the wrong number of solutions
+**Topic:** linear_system · **Visual:** medium
+
+Compares `rank(A)`, `rank([A|b])` and the number of unknowns, then tests whichever of
+"infinitely many solutions", "no solution" or "a unique solution" the student asserted.
+
+- **Check:** `rank([A|b]) > rank(A)` → none; `rank = rank < n` → infinitely many; `rank = n` → one
+- **Scene:** `StaticStepHighlight`
+- **Hint:** "How many solutions there are is settled by how many independent conditions the
+  rows really impose, against how many unknowns there are."
+
+---
+
 ### LA19 — projection with the wrong denominator
 **Topic:** projection · **Visual:** strong
 

@@ -32,6 +32,7 @@ from helpers import SceneParamError  # noqa: E402
 from determinant_area import DeterminantAreaCompare  # noqa: E402
 from eigen_ray import EigenRayTest  # noqa: E402
 from grid_transform import GridTransformCompare  # noqa: E402
+from angle_check import AnglePreservationCheck  # noqa: E402
 from line_system import LineSystemCompare  # noqa: E402
 from span_compare import SpanCompare  # noqa: E402
 from step_focus import StaticStepHighlight  # noqa: E402
@@ -49,6 +50,25 @@ _L = "planner"   # filled by the LLM
 
 
 TEMPLATES: dict[str, dict[str, Any]] = {
+    "AnglePreservationCheck": {
+        "class": AnglePreservationCheck,
+        "module": "angle_check",
+        "file": os.path.join(_HERE, "angle_check.py"),
+        "scene": "AnglePreservationCheck",
+        "priority": "P1",
+        "duration": 11.0,
+        "covers": ["LA22", "LA23"],
+        "summary": "Draw the basis and the right angle between it, apply the "
+                   "student's own map, and watch the corner close (or, in "
+                   "length mode, watch the tips leave the unit circle).",
+        "param_schema": {
+            "e1_image": (_S, "2-vector: where e1 lands"),
+            "e2_image": (_S, "2-vector: where e2 lands"),
+            "show": (_S, "'angle' (corner closes) or 'length' (tips leave the circle)"),
+            "title": (_L, "str"),
+            "hint": (_L, "str, positional only -- see check_hint"),
+        },
+    },
     # -- T1 ------------------------------------------------------------
     "GridTransformCompare": {
         "class": GridTransformCompare,

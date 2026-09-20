@@ -844,6 +844,30 @@ def _syms(step: Step, env: dict[str, Val]) -> list[str]:
     return []
 
 
+def _loose(v: Optional[Val]) -> bool:
+    """Did the page actually say whether this vector is a row or a column?
+
+    "(1, 1)" written on paper says nothing, and the extractor has to store it
+    one way round. Treating that stored guess as the student's claim made
+    A(1,1) a shape error -- a correct step, accused.
+    """
+    return v is None or (v.orientation or "unspecified") == "unspecified"
+
+
+def _orient_for_product(a, b, va: Optional[Val], vb: Optional[Val]):
+    """Transpose an unoriented vector operand so a product that the student
+    plainly meant can be formed. A genuine shape mismatch still is one."""
+    if not (isinstance(a, sp.MatrixBase) and isinstance(b, sp.MatrixBase)):
+        return a, b
+    if a.cols == b.rows:
+        return a, b
+    if _loose(vb) and 1 in b.shape and a.cols == b.cols:
+        return a, b.T
+    if _loose(va) and 1 in a.shape and a.rows == b.rows:
+        return a.T, b
+    return a, b
+
+
 def expected_for(step: Step, env: dict[str, Val], topic: str) -> tuple[Optional[Val], str]:
     """Layer 1. -> (expected value, how we got it). (None, reason) means UNKNOWN."""
     # 1. The student restated an expression: evaluate it from the givens.
@@ -860,12 +884,12 @@ def expected_for(step: Step, env: dict[str, Val], topic: str) -> tuple[Optional[
         if op == "copy_given" and syms:
             return env[syms[0]], f"the given {syms[0]}"
         if op == "multiply" and len(syms) >= 2:
-            out = env[syms[0]].obj
+            out, out_val = env[syms[0]].obj, env[syms[0]]
             for s in syms[1:]:
-                a, b = out, env[s].obj
+                a, b = _orient_for_product(out, env[s].obj, out_val, env[s])
                 if isinstance(a, sp.MatrixBase) and isinstance(b, sp.MatrixBase) and a.cols != b.rows:
                     raise ShapeMismatch(a.shape, b.shape)
-                out = a * b
+                out, out_val = a * b, None
             return wrap(out), f"the product {' '.join(syms)}"
         if op in ("add", "subtract") and len(syms) >= 2:
             a, b = env[syms[0]].obj, env[syms[1]].obj
@@ -961,14 +985,52 @@ def topic_target(topic: str, env: dict[str, Val]) -> tuple[Optional[Val], str]:
             return wrap(_project(env["u"].obj, env["v"].obj)), "the projection of u onto v"
         if topic == "norm" and "v" in env:
             return wrap(_col(env["v"].obj).norm(), kind="scalar"), "the norm of v"
-        if topic == "solve_system" and "A" in env and "b" in env:
-            A, b = env["A"].obj, _col(env["b"].obj)
-            return wrap(A.solve(b)), "the solution of Ax=b"
+        # Ax = b, found by shape rather than by the topic's spelling. The
+        # model labels real uploads "Linear Algebra", so gating on the exact
+        # string "solve_system" meant a wrong solution vector was never
+        # compared to anything at all. Deliberately strict about the names:
+        # a loose guess here would accuse correct work in some OTHER problem
+        # that happens to have a matrix and a vector lying around.
+        if (topic or "").lower() not in _NON_SOLVE_TOPICS:
+            A, b = _solve_setup(env)
+            if A is not None:
+                return wrap(A.solve(b)), "the solution of Ax=b"
     except ShapeMismatch:
         raise
     except Exception:
         return None, "could not compute the target answer"
     return None, "no target answer for this topic"
+
+
+# Topics that name their own operation, so an A and a b lying in scope must
+# not be read as "solve Ax = b".
+_NON_SOLVE_TOPICS = (
+    "eigen", "determinant", "inverse", "transpose", "matrix_multiply",
+    "matrix_add", "cross_product", "dot_product", "projection", "span",
+    "norm", "rref",
+)
+
+
+def _solve_setup(env: dict[str, Val]):
+    """-> (A, b as a column) for a square, invertible Ax = b, or (None, None)."""
+    A = None
+    for name in ("A", "M"):
+        v = env.get(name)
+        if v is not None and getattr(v, "is_matrix", False) and v.obj.rows > 1:
+            A = v.obj
+            break
+    rhs = env.get("b")
+    if A is None or rhs is None or not getattr(rhs, "is_matrix", False):
+        return None, None
+    if A.rows != A.cols:
+        return None, None
+    try:
+        b = _col(rhs.obj)
+        if b.rows != A.rows or A.det() == 0:
+            return None, None
+    except Exception:  # noqa: BLE001
+        return None, None
+    return A, b
 
 
 def _eigenvalues(M: sp.Matrix) -> list[sp.Expr]:
@@ -1368,6 +1430,11 @@ def _check_one(step: Step, env: dict[str, Val], topic: str, cand: Val):
     verdict = compare(expected, cand)
     if verdict == "unknown":
         return UNCHECKED, f"cannot compare a {cand.kind} against {how}", expected, False, None
+    if verdict == "neq" and _names_some_of(cand, expected):
+        # "lambda = 3" against eigenvalues {1, 3}. Listing fewer of them than
+        # the problem asked for is incomplete, not wrong, and this product
+        # blames steps that are WRONG. Every value they did name is right.
+        return OK, f"names part of {how}", expected, False, None
     if verdict == "neq":
         return WRONG, f"does not match {how}", expected, False, None
 
@@ -1385,11 +1452,233 @@ def _check_one(step: Step, env: dict[str, Val], topic: str, cand: Val):
     return OK, f"matches {how}", expected, False, None
 
 
+def _names_some_of(cand: Val, expected: Val) -> bool:
+    """Is every value the student named one of the expected ones?
+
+    Only meaningful for a scalar_list target, which in this codebase means the
+    eigenvalues -- a set, where naming a member is a true statement. A vector's
+    coordinates arrive as a matrix and never reach here, so a short vector is
+    still wrong.
+    """
+    if expected.kind != "scalar_list" or cand.kind not in ("scalar", "scalar_list"):
+        return False
+    want, got = _as_list(expected), _as_list(cand)
+    if not want or not got or len(got) >= len(want):
+        return False
+    pool = list(want)
+    decimals = bool(expected.wrote_decimals or cand.wrote_decimals)
+    for x in got:
+        for i, y in enumerate(pool):
+            if _scalar_cmp(x, y, decimals) in ("eq", "rounding"):
+                pool.pop(i)
+                break
+        else:
+            return False
+    return True
+
+
 def _target_quiet(topic: str, env: dict[str, Val]):
     try:
         return topic_target(topic, env)
     except Exception:
         return None, ""
+
+
+
+# --------------------------------------------------------------------------
+# Property claims
+#
+# Some mistakes are a sentence, not a number. "T preserves angles", "u and v
+# are linearly independent", "so there are infinitely many solutions" are
+# assertions about the givens that are true or false, and a student can write
+# every number correctly and still land on the wrong one. Nothing that checks
+# VALUES can see them, so they are checked here.
+#
+# Rules: only fire on a claim we can decide from the givens, only when the
+# answer is definitely False, and never on a sentence that is merely unclear.
+# Unreadable is not wrong -- that is the same charity the rest of the file
+# gives arithmetic.
+# --------------------------------------------------------------------------
+
+_NEGATION = re.compile(
+    r"\b(?:not|isn'?t|aren'?t|does\s+not|doesn'?t|cannot|can'?t|no\s+longer|fails?\s+to)\b"
+)
+
+
+def _claim_is_negated(text: str, at: int) -> bool:
+    """A negation in the ~40 characters before the phrase flips the claim."""
+    return bool(_NEGATION.search(text[max(0, at - 40):at]))
+
+
+def _square_from_env(env: dict) -> Optional["sp.Matrix"]:
+    for name in ("A", "M", "T"):
+        v = env.get(name)
+        if v is not None and v.is_matrix and v.obj.rows == v.obj.cols:
+            return v.obj
+    return None
+
+
+def _images_matrix(env: dict) -> Optional["sp.Matrix"]:
+    """A transformation given by where the basis vectors land: the images are
+    the COLUMNS of the standard matrix."""
+    cols = []
+    for k in ("T(e1)", "T(e2)", "T(e3)"):
+        v = env.get(k)
+        if v is None or not v.is_matrix:
+            break
+        cols.append(_col(v.obj))
+    if len(cols) >= 2:
+        try:
+            return sp.Matrix.hstack(*cols)
+        except Exception:  # noqa: BLE001
+            return None
+    return None
+
+
+def _conformal(A) -> Optional[bool]:
+    """Angles preserved <=> A^T A is a positive multiple of I."""
+    try:
+        G = sp.simplify(A.T * A)
+        n = G.rows
+        c = G[0, 0]
+        if c == 0:
+            return False
+        return bool(sp.simplify(G - c * sp.eye(n)).is_zero_matrix)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _isometry(A) -> Optional[bool]:
+    try:
+        return bool(sp.simplify(A.T * A - sp.eye(A.rows)).is_zero_matrix)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _solution_counts(env: dict):
+    """-> (no_solution, infinitely_many, unique) for Ax = b, or None."""
+    A = env.get("A") or env.get("M")
+    b = env.get("b")
+    if A is None or b is None or not A.is_matrix or not b.is_matrix:
+        return None
+    try:
+        M = A.obj
+        rhs = _col(b.obj)
+        if rhs.rows != M.rows:
+            rhs = _col(b.obj.T)
+        if rhs.rows != M.rows:
+            return None
+        r, ra, n = M.rank(), M.row_join(rhs).rank(), M.cols
+    except Exception:  # noqa: BLE001
+        return None
+    return (ra > r, ra == r and r < n, ra == r and r == n)
+
+
+def _nonzero_det(A) -> Optional[bool]:
+    try:
+        return bool(sp.simplify(A.det()) != 0)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _zero_det(A) -> Optional[bool]:
+    v = _nonzero_det(A)
+    return None if v is None else (not v)
+
+
+def _commute(P, Q) -> Optional[bool]:
+    try:
+        if P.shape != Q.shape or P.rows != P.cols:
+            return None
+        return bool(sp.simplify(P * Q - Q * P).is_zero_matrix)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _perp(u, v) -> Optional[bool]:
+    try:
+        a, b = _col(u), _col(v)
+        if a.rows != b.rows:
+            return None
+        return bool(sp.simplify(a.dot(b)) == 0)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def check_property_claims(ext, env: dict) -> Optional[tuple]:
+    """-> (step_index, step, error_id, what_was_claimed) for the first sentence
+    that asserts something demonstrably false about the givens.
+
+    Some mistakes are a sentence, not a number: every value on the page can be
+    right while the conclusion drawn from them is false. Each entry pairs a way
+    of writing the claim with the computation that settles it, and a claim we
+    cannot settle is left alone rather than guessed at.
+    """
+    A = _images_matrix(env) or _square_from_env(env)
+    P, Q = env.get("A"), env.get("B")
+    V = _vector_set(env)
+    counts = _solution_counts(env)
+
+    # (pattern, error id, what they said, how to settle it, honour a preceding
+    # "not"). The last flag is off where the negation is already IN the
+    # pattern -- "is not invertible" is its own claim, not a retracted one.
+    tests = []
+    if A is not None and A.rows == A.cols:
+        tests += [
+            (re.compile(r"preserv\w*\s+(?:the\s+)?angle", re.I), "LA22",
+             "that the transformation preserves angles", lambda: _conformal(A), True),
+            (re.compile(r"preserv\w*\s+(?:the\s+)?length|is\s+an?\s+isometry", re.I), "LA23",
+             "that the transformation preserves lengths", lambda: _isometry(A), True),
+            (re.compile(r"\b(?:is|are)\s+invertible\b|\bhas\s+an\s+inverse\b"
+                        r"|\bis\s+non-?singular\b", re.I), "LA25",
+             "that the matrix is invertible", lambda: _nonzero_det(A), True),
+            (re.compile(r"\bis\s+singular\b|\b(?:is\s+not|isn'?t)\s+invertible\b"
+                        r"|\bhas\s+no\s+inverse\b", re.I), "LA25",
+             "that the matrix is not invertible", lambda: _zero_det(A), False),
+        ]
+    if P is not None and Q is not None and P.is_matrix and Q.is_matrix:
+        tests.append(
+            (re.compile(r"\bAB\s*=\s*BA\b|\bcommut", re.I), "LA24",
+             "that the two matrices commute", lambda: _commute(P.obj, Q.obj), True))
+    if len(V) == 2:
+        tests.append(
+            (re.compile(r"\b(?:are|is)\s+(?:mutually\s+)?(?:orthogonal|perpendicular)\b",
+                        re.I), "LA26",
+             "that the two vectors are perpendicular", lambda: _perp(V[0], V[1]), True))
+    if counts is not None:
+        none_, many, one = counts
+        tests += [
+            (re.compile(r"\binfinitely\s+many\s+solutions?\b|\bfree\s+variable", re.I),
+             "LA27", "that the system has infinitely many solutions", lambda: many, True),
+            (re.compile(r"\bno\s+solutions?\b|\bis\s+inconsistent\b", re.I),
+             "LA27", "that the system has no solution", lambda: none_, False),
+            (re.compile(r"\b(?:a\s+)?unique\s+solution\b|\bexactly\s+one\s+solution\b", re.I),
+             "LA27", "that the system has exactly one solution", lambda: one, True),
+        ]
+
+    steps = sorted(ext.steps, key=lambda st: (st.page, st.reading_order))
+    for i, st in enumerate(steps):
+        if st.crossed_out:
+            continue
+        text = " ".join(filter(None, [st.raw_text or "",
+                                      getattr(st.value, "text", "") or ""]))
+        if not text.strip():
+            continue
+        for pattern, eid, said, predicate, honour_not in tests:
+            m = pattern.search(text)
+            if not m:
+                continue
+            # "the orthogonal projection of b" is not a claim that two things
+            # are perpendicular, and a page about projections says it a lot.
+            if eid == "LA26" and re.search(r"\bproj", text, re.I):
+                continue
+            truth = predicate()
+            if truth is None:
+                continue
+            asserted = not (honour_not and _claim_is_negated(text, m.start()))
+            if asserted and truth is False:
+                return i, st, eid, said
+    return None
 
 
 def verify(ext: Extraction) -> Verdict:
@@ -1442,6 +1731,23 @@ def verify(ext: Extraction) -> Verdict:
 
     wrongs = [r for r in results if r.status == WRONG and not r.plausible_rounding]
     if not wrongs:
+        # Every value checks out. Before declaring the work clean, look for a
+        # sentence that asserts something false about the givens -- a student
+        # can write every number correctly and still conclude the wrong thing,
+        # and that conclusion is the whole mistake.
+        claim = check_property_claims(ext, envs[0])
+        if claim is not None:
+            idx, cstep, eid, said = claim
+            verdict.first_error_index = idx
+            verdict.step_id = cstep.id
+            verdict.student_label = cstep.student_label
+            verdict.error_id = eid
+            verdict.confidence = "high"
+            verdict.flags = ["load_bearing", "property_claim"]
+            verdict.notes.append(
+                f"step {cstep.id} claims {said}; that does not hold for the givens"
+            )
+            return verdict
         verdict.confidence = "high"
         verdict.flags = ["no_error_found"]
         _fill_no_error(verdict, ext, envs[0], topic)
