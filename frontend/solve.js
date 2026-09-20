@@ -178,8 +178,19 @@
       var n = 0;
       Array.prototype.forEach.call(list || [], function (f) {
         if (!f) return;
-        if (!/^image\//.test(f.type) && !isPdf(f) && !/\.(hei[cf])$/i.test(f.name || '')) return;
-        if (isPdf(f) && !opts.allowPdf) { toast('Upload a PNG or JPEG of the problem.'); return; }
+        // PDFs are rasterised to page images, since the extractor reads images.
+        if (global.NoemaPdf && global.NoemaPdf.isPdf(f)) {
+          toast('Reading ' + (f.name || 'the PDF') + '\u2026');
+          global.NoemaPdf.toImages(f).then(function (res) {
+            res.files.forEach(function (pg) { box.files.push(pg); });
+            render(); sync();
+            toast('Added ' + res.files.length + ' page' + (res.files.length > 1 ? 's' : '') + '.');
+          }).catch(function (err) {
+            toast('Could not read that PDF: ' + (err && err.message ? err.message : err));
+          });
+          n++; return;
+        }
+        if (!/^image\//.test(f.type) && !/\.(hei[cf])$/i.test(f.name || '')) return;
         box.files.push(f); n++;
       });
       if (n) { render(); sync(); }
@@ -265,16 +276,7 @@
       });
     }
 
-    function pdfNotice() {
-      if (!opts.allowPdf) return;
-      var n = $('#ws-notice');
-      if (box.files.some(isPdf)) {
-        n.hidden = false;
-        n.innerHTML = '<b>PDFs are not readable yet.</b> The extractor opens uploads as ' +
-                      'images (backend/extract.py), so a PDF comes back as an extraction ' +
-                      'error. Export the page as PNG or JPEG for now.';
-      } else { n.hidden = true; }
-    }
+    function pdfNotice() { $('#ws-notice').hidden = true; }
 
     render(); sync();
     return box;

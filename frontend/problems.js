@@ -124,15 +124,34 @@
     var n = 0;
     Array.prototype.forEach.call(list || [], function (f) {
       if (!f) return;
-      if (/\.pdf$/i.test(f.name || '') || f.type === 'application/pdf') {
-        toast('PDFs are not readable yet — export the page as PNG or JPEG.');
-        return;
-      }
+      // A PDF is rasterised here and added a page at a time, because the
+      // extractor only reads images. See pdfpages.js.
+      if (global.NoemaPdf && global.NoemaPdf.isPdf(f)) { addPdf(f); n++; return; }
       if (!/^image\//.test(f.type) && !/\.(hei[cf])$/i.test(f.name || '')) return;
       add({ kind: 'image', file: f, title: f.name || 'photo' });
       n++;
     });
     if (!n && list && list.length) toast('That file type cannot be read here.');
+  }
+
+  function addPdf(file) {
+    toast('Reading ' + (file.name || 'the PDF') + '\u2026');
+    global.NoemaPdf.toImages(file, function (page, total) {
+      toast('Reading page ' + page + ' of ' + total + '\u2026');
+    }).then(function (res) {
+      res.files.forEach(function (f) {
+        add({ kind: 'image', file: f, title: f.name });
+      });
+      var msg = res.files.length === 1
+        ? 'Added 1 page.'
+        : 'Added ' + res.files.length + ' pages as separate problems.';
+      if (res.total > res.used) {
+        msg += ' Only the first ' + res.used + ' of ' + res.total + ' were taken.';
+      }
+      toast(msg);
+    }).catch(function (err) {
+      toast('Could not read that PDF: ' + (err && err.message ? err.message : err));
+    });
   }
 
   /* ── wiring ────────────────────────────────────────────────────────── */

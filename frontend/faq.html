@@ -61,9 +61,10 @@ AB = [0 -3; 1 0]</pre>
 
   <h2>Can I upload a PDF?</h2>
   <p>
-    Not yet. The extractor opens every upload as an image, so a PDF comes back as an
-    extraction error. Export the page as PNG or JPEG. The picker accepts PDFs and warns
-    you rather than failing silently, but the warning is the honest state of it.
+    Yes. The extractor itself only reads images, so Noema turns each page of the PDF
+    into one before uploading it &mdash; that happens in your browser, and the PDF never
+    leaves your machine as a PDF. A multi-page file becomes one problem per page, up to
+    twenty.
   </p>
 
   <h2>What if it misreads my handwriting?</h2>
