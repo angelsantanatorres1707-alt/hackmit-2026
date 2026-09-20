@@ -864,3 +864,38 @@ Strongest three in order, all verified end to end:
 
 All three use P0 templates only (`CompositionOrderCompare` is P1 — LA02 degrades acceptably to
 `GridTransformCompare` if you run out of time).
+
+---
+
+## The visual explanation planner
+
+`backend/storyboard.py` sits between "we know what went wrong" and "render this
+scene". Before it there was nothing: the scene was chosen by a lookup on the
+error code and handed whatever parameters the builder produced, with no
+statement anywhere of what the film was supposed to TEACH -- and so no way to
+notice when a scene had been given parameters that could not teach it.
+
+For each supported misconception the planner names the teaching goal, the
+contrast that carries it, the objects that must appear, and the beat where the
+student's reasoning first leaves the road. That beat is marked `divergence` and
+is the climax; the other beats are setup, not equal partners.
+
+Then the **visual contract** checks it, and the check is arithmetic rather than
+a checklist:
+
+| Concept | Must show | Refused when |
+|---|---|---|
+| `MATRIX_COMPOSITION_ORDER` | the same starting object, the student's order, the asked-for order, a visible divergence | the two orders land the vector in the same place |
+| `PROJECTION_VS_RESIDUAL` | the original vector, the target subspace, the perpendicular segment kept, the shadow in the subspace | the claim IS the shadow, or the claim is not perpendicular to the subspace |
+| `COLUMN_SPACE` | the columns, the reachable set, b outside it | the columns already span the space, or b is in fact reachable |
+
+Every storyboard is also refused if a required object has no value to draw, or
+if no beat is marked as the divergence -- a film with no climax is a list.
+
+A refused storyboard takes the plan down a rung instead of rendering, because a
+video that cannot make its point is worse than the plain one that admits it.
+The storyboard travels on the job as `storyboard`, contract problems included,
+so a refusal is visible rather than silent.
+
+No model writes Manim, or anything else, here. The planner is ordinary code
+reading the verified diagnosis.

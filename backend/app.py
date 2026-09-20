@@ -253,6 +253,8 @@ def analyze_extraction(ext: Extraction, meta: dict, *, wait: bool, quality: Opti
         "hint": plan.hint,
         "scene_template": plan.template,
         "scene_params": plan.params,
+        # What the film is meant to teach, and whether the contract let it.
+        "storyboard": plan.storyboard,
         # Present when the scene replays the student's own steps: the ordered
         # step list with a time window each, so the player can highlight the
         # line the video is currently on. None means a comparison template.
@@ -288,12 +290,30 @@ def analyze_extraction(ext: Extraction, meta: dict, *, wait: bool, quality: Opti
 
     if verdict.first_error_index is None:
         job["video_status"] = "not_needed"
-        job["hint"] = (
-            "Could not check this work, so nothing is marked wrong. The read-back "
-            "below is what was seen on the page."
-            if crashes else
-            "Nothing in this work disagrees with the problem as it was read."
-        )
+        # Someone arrives here because they were told they were wrong and
+        # cannot see why. "Nothing disagrees with the problem as it was read"
+        # is true, hedged, and no use to them: it neither confirms the work nor
+        # gives them anywhere to go. Say plainly that the reasoning holds, and
+        # offer the one thing that would move it forward.
+        checked = sum(1 for r in verdict.step_results if r.status == "OK")
+        if crashes:
+            job["hint"] = ("Could not check this work, so nothing is marked wrong. "
+                           "The read-back below is what was seen on the page.")
+        elif checked:
+            job["hint"] = (
+                f"This checks out. Every step that could be verified against the "
+                f"problem does ({checked} of them), and the reasoning is valid. If "
+                f"it was marked wrong, tell me the answer you were expecting and I "
+                f"will look at where the two part company."
+            )
+        else:
+            # Nothing was checkable -- honest about that, rather than passing
+            # silence off as a clean bill of health.
+            job["hint"] = (
+                "Nothing here could be checked against the problem, so this is not a "
+                "clean bill of health -- it is a blank one. Tell me which step you "
+                "doubt, or write the work out one step per line, and I will check it."
+            )
         return job
 
     plan_payload = plan.json()

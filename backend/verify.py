@@ -705,17 +705,17 @@ def _projection_setup(env: dict) -> tuple:
         return None, [], []
 
     basis = [vecs[n] for n in span_names]
-    # A "span" that already fills the whole space is not a subspace to project
-    # onto: the projection is the identity, the residual is zero however the
-    # student got there, and the check can never mean anything. This guard is
-    # what stops a change-of-basis page -- b1, b2 spanning R^2 and a vector v --
-    # from being diagnosed as a projection error, which is a video that
-    # confidently teaches the wrong concept.
-    try:
-        A = sp.Matrix.hstack(*basis)
-        if A.rank() >= A.rows:
-            return None, [], []
-    except Exception:  # noqa: BLE001
+    # This used to refuse whenever the span filled the whole space, on the
+    # reasoning that projecting onto R^n is the identity so there is nothing to
+    # check. That reasoning was wrong: the projection being the identity means
+    # the ANSWER is v, and a student who writes something else is wrong and
+    # perfectly detectable. It cost a real case -- adding the two one-vector
+    # projections onto span{(1,0),(1,1)} -- which came back clean.
+    #
+    # What the guard was actually for was stopping a change-of-basis page from
+    # being read as a projection. So ask that directly: does this page talk
+    # about projecting at all?
+    if PROJECTION_EVIDENCE not in env:
         return None, [], []
     return vecs[target], basis, span_names
 
@@ -1277,6 +1277,23 @@ def _structural(step: Step, env: dict[str, Val], topic: str, claimed: Optional[V
             ok = claimed_dim == rank
             return ok, wrap(sp.Integer(rank), kind="scalar"), (None if ok else "LA15"), f"the span has dimension {rank}"
 
+    # A claimed solution is verified by SUBSTITUTION, not by solving and
+    # comparing. Solving needs a unique answer, so it refused every singular or
+    # underdetermined system -- and a student who produced a perfectly good
+    # solution to one was told nothing could be checked. Substitution works on
+    # all of them, and it is what "is this a solution?" actually means.
+    if (SOLVE_EVIDENCE in env and claimed is not None and claimed.is_matrix
+            and _claims_to_be_the_solution(step)):
+        A_s, b_s = _system_pair(env)
+        if A_s is not None:
+            try:
+                x = _col(claimed.obj)
+                if x.rows == A_s.cols:
+                    ok = bool(sp.simplify(A_s * x - b_s).is_zero_matrix)
+                    return ok, None, None, "substituted back into Ax = b"
+            except Exception:  # noqa: BLE001
+                pass
+
     subject = _subject_matrix(env)
     if _claims_eigenvector(step, topic, claimed) and subject is not None:
         M = subject
@@ -1286,6 +1303,43 @@ def _structural(step: Step, env: dict[str, Val], topic: str, claimed: Optional[V
         return ok, (wrap(best) if best is not None else None), (None if ok else "LA09"), "eigenvector test"
 
     return None, None, None, ""
+
+
+_SAYS_SOLUTION = re.compile(r"^\s*x\s*=|\bsolution\s+is\b|\bx\s*=\s*[\[(]"
+                            r"|\btherefore\s+x\b", re.I)
+
+
+def _claims_to_be_the_solution(step: Step) -> bool:
+    """Does this line say the vector on it IS the solution?
+
+    Substituting every vector on the page would blame "the columns of A are
+    ..." for not solving the system, which it never claimed to do.
+    """
+    text = " ".join(filter(None, [step.raw_text or "", step.claimed_expression or ""]))
+    if _SAYS_SOLUTION.search(text):
+        return True
+    return bool(step.is_final_answer and not re.match(r"^\s*[A-Za-z]\w*\s*=", text)) \
+        or bool(step.is_final_answer and re.match(r"^\s*x\s*=", text))
+
+
+def _system_pair(env: dict[str, Val]):
+    """(A, b as a column) for a page about Ax = b, of any rank. Or (None, None)."""
+    A = None
+    for name in ("A", "M"):
+        v = env.get(name)
+        if v is not None and getattr(v, "is_matrix", False) and v.obj.rows > 1:
+            A = v.obj
+            break
+    rhs = env.get("b")
+    if A is None or rhs is None or not getattr(rhs, "is_matrix", False):
+        return None, None
+    try:
+        b = _col(rhs.obj)
+        if b.rows != A.rows:
+            b = _col(rhs.obj.T)
+        return (A, b) if b.rows == A.rows else (None, None)
+    except Exception:  # noqa: BLE001
+        return None, None
 
 
 def _vector_set(env: dict[str, Val]) -> list[sp.Matrix]:
@@ -1689,6 +1743,17 @@ class Verdict:
 # missing; the projection machinery underneath is unchanged.
 AXIS_SYMBOL = "axis"
 
+# Set when the page actually mentions projecting, so the span machinery cannot
+# hijack a problem that merely has a family of vectors lying around.
+PROJECTION_EVIDENCE = "__projection_evidence__"
+
+# Set when the page is about solving Ax = b, so a claimed solution can be
+# checked by SUBSTITUTION -- which works for a singular or underdetermined
+# system, where there is no single answer to solve for and compare against.
+SOLVE_EVIDENCE = "__solve_evidence__"
+_SOLVE_WORD = re.compile(r"\bsolve\b|\bsolution\b|\bconsistent\b"
+                         r"|\bA\s*x\s*=\s*b\b", re.I)
+
 _AXIS_WORDS = (
     (re.compile(r"\b(?:the\s+)?x[\s-]*axis\b|\bhorizontal\s+axis\b", re.I), 0),
     (re.compile(r"\b(?:the\s+)?y[\s-]*axis\b|\bvertical\s+axis\b", re.I), 1),
@@ -1750,6 +1815,15 @@ def _given_envs(ext: Extraction, cap: int = 4) -> list[dict[str, Val]]:
         v = to_sympy(g.object)
         if v is not None:
             base[g.symbol] = v
+    text_all = " ".join(filter(None, [getattr(ext.problem, "statement", "") or "",
+                                      getattr(ext.problem, "asks_for", "") or "",
+                                      getattr(ext.problem, "topic", "") or ""]
+                              + [st.raw_text or "" for st in ext.steps]))
+    if _PROJECTION_WORD.search(text_all):
+        base[PROJECTION_EVIDENCE] = Val("text", "projection", text="projection")
+    if _SOLVE_WORD.search(text_all):
+        base[SOLVE_EVIDENCE] = Val("text", "solve", text="solve")
+
     axis = _axis_from_problem(ext, base)
     if axis is not None and AXIS_SYMBOL not in base:
         # `text` carries the axis's NAME so the hint and the scene label can
@@ -2020,6 +2094,64 @@ def _commute(P, Q) -> Optional[bool]:
         return None
 
 
+def _produced_vectors(ext, givens: list) -> list:
+    """Every distinct vector the student wrote down, in order.
+
+    Deliberately does NOT exclude the givens: in Gram-Schmidt u1 = v1, and
+    dropping it left one vector where the claim was about two.
+    """
+    out: list = []
+    seen: list = []
+    for st in sorted(ext.steps, key=lambda s: (s.page, s.reading_order)):
+        if st.crossed_out:
+            continue
+        v = to_sympy(st.value)
+        if v is None or not v.is_matrix:
+            continue
+        try:
+            c = _col(v.obj)
+        except Exception:  # noqa: BLE001
+            continue
+        if c.cols != 1 or c.rows < 2:
+            continue
+        if any(sp.simplify(c - g).is_zero_matrix for g in seen):
+            continue
+        seen.append(c)
+        out.append(c)
+    return out
+
+
+_ORTHO_SET = re.compile(r"\borthogonal\s+(?:basis|set|vectors|system)\b"
+                        r"|\borthonormal\b|\bmutually\s+orthogonal\b", re.I)
+_TUPLE_ANY = re.compile(r"[\[(]\s*(-?\d+(?:\.\d+)?(?:\s*/\s*-?\d+)?"
+                        r"(?:\s*,\s*-?\d+(?:\.\d+)?(?:\s*/\s*-?\d+)?)+)\s*[\])]")
+
+
+def _vectors_in_text(text: str) -> list:
+    """Every vector literal written in this sentence, as columns."""
+    out: list = []
+    for m in _TUPLE_ANY.finditer(text or ""):
+        try:
+            out.append(sp.Matrix([sp.nsimplify(x.strip()) for x in m.group(1).split(",")]))
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+def _pairwise_orthogonal(vectors: list) -> Optional[bool]:
+    try:
+        same_size = [v for v in vectors if v.rows == vectors[0].rows]
+        if len(same_size) < 2:
+            return None
+        for i in range(len(same_size)):
+            for j in range(i + 1, len(same_size)):
+                if sp.simplify(same_size[i].dot(same_size[j])) != 0:
+                    return False
+        return True
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _perp(u, v) -> Optional[bool]:
     try:
         a, b = _col(u), _col(v)
@@ -2272,6 +2404,12 @@ def check_property_claims(ext, env: dict) -> Optional[tuple]:
     A = _images_matrix(env) or _square_from_env(env)
     P, Q = env.get("A"), env.get("B")
     V = _vector_set(env)
+    # Properties were only ever tested against the GIVENS. A construction
+    # problem -- Gram-Schmidt, "find an orthogonal basis", "normalise these" --
+    # asserts a property of the answer the student BUILT, and nothing looked at
+    # it, so every such page came back clean however wrong the construction was.
+    # The subject of a claim can be the student's own output.
+    produced = _produced_vectors(ext, V)
     counts = _solution_counts(env)
 
     # (pattern, error id, what they said, how to settle it, honour a preceding
@@ -2350,6 +2488,15 @@ def check_property_claims(ext, env: dict) -> Optional[tuple]:
                                       getattr(st.value, "text", "") or ""]))
         if not text.strip():
             continue
+        # A claim ABOUT A SET -- "{...} is the orthogonal basis", "these are
+        # orthonormal" -- is about the set the sentence names. Read it out of
+        # the sentence, because that is where a student writes it; fall back to
+        # everything they produced when the sentence only refers to it.
+        if _ORTHO_SET.search(text) and not _claim_is_negated(text, 0):
+            subject = _vectors_in_text(text) or produced
+            if len(subject) >= 2 and _pairwise_orthogonal(subject) is False:
+                return i, st, "LA41", "that the set just constructed is orthogonal"
+
         for pattern, eid, said, predicate, honour_not in tests:
             m = pattern.search(text)
             if not m:

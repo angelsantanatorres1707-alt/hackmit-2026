@@ -247,6 +247,9 @@ HINTS: dict[str, tuple[str, str]] = {
     "LA32": ("A shadow falls onto the line you were asked about, and lands ALONG it. "
              "Look at which line your own arrow is sitting on in {step}.",
              "watch which line your arrow sits on"),
+    "LA41": ("Orthogonal is something you can check on the set you built, not something "
+             "the recipe guarantees you got right. Take the two you produced in {step} "
+             "and look at the corner they make.", "look at the corner your two make"),
     "LA33": ("Where each basis vector lands is a COLUMN of the matrix, not a row. "
              "Watch where your matrix actually sends the basis in {step}, against "
              "where the problem says it should go.",
@@ -491,6 +494,9 @@ class Plan:
     # Rungs below `fallback`, so demoting a comparison template under StepReplay
     # keeps StaticStepHighlight as the never-raises bottom of the ladder.
     fallbacks: list[dict[str, Any]] = field(default_factory=list)
+    # What this film is meant to TEACH, and whether it can -- see
+    # backend/storyboard.py. None when the error has no planner yet.
+    storyboard: Optional[dict[str, Any]] = None
 
     def json(self) -> dict:
         return {
@@ -500,6 +506,7 @@ class Plan:
             "fallback": self.fallback,
             "fallbacks": self.fallbacks,
             "notes": self.notes,
+            "storyboard": self.storyboard,
         }
 
 
@@ -541,6 +548,7 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
         "LA24": _grid_order,
         "LA28": _eigen_vector,
         "LA33": _grid_single, "LA34": _span, "LA35": _eigen_value,
+        "LA41": _vector_op,
         "LA36": _determinant, "LA37": _determinant,
         "LA38": _grid_roundtrip, "LA39": _vector_op, "LA40": _line_system,
         "LA29": _span_rebuild,
@@ -655,8 +663,32 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
     elif replay["reason"]:
         notes.append(f"no StepReplay ({replay['reason']}); used {template}")
 
+    # ---------------------------------------------------------------------
+    # The visual contract. A scene that cannot make its point is worse than
+    # the plain one that admits it, so a storyboard the contract refuses takes
+    # the ladder down a rung instead of rendering.
+    board = None
+    try:
+        from . import storyboard as sb_mod
+
+        sb = sb_mod.build(verdict, ext, template, params)
+        if sb is not None:
+            board = sb.json()
+            if not sb.ok:
+                notes.append(f"storyboard for {sb.concept} fails its visual "
+                             f"contract: {'; '.join(sb.problems)}")
+                if fallback:
+                    notes.append(f"{template} refused; using {fallback['template']}")
+                    template, params = fallback["template"], dict(fallback["params"])
+                    params.setdefault("hint", hint)
+                    fallback = deeper[0] if deeper else None
+                    deeper = deeper[1:] if len(deeper) > 1 else []
+                    board["rendered_instead"] = template
+    except Exception as exc:  # noqa: BLE001
+        notes.append(f"storyboard skipped: {type(exc).__name__}: {exc}")
+
     return Plan(template, params, hint, forbidden, fallback, notes,
-                replay_block, deeper)
+                replay_block, deeper, storyboard=board)
 
 
 def _replay_hint(caption: str, eid: Optional[str], ref: str) -> tuple[str, str]:
