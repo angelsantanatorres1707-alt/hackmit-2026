@@ -142,6 +142,7 @@ body[data-stage="working"] .stage-center { display: flex; align-items: center; j
 
 .cta {
   display: inline-flex; align-items: center; gap: 14px;
+  text-decoration: none;
   margin-top: 38px; padding: 9px 9px 9px 30px;
   background: var(--ink); color: #fff; border-radius: 999px;
   font-weight: 500; font-size: 1.04rem; letter-spacing: 0.01em;
@@ -152,6 +153,12 @@ body[data-stage="working"] .stage-center { display: flex; align-items: center; j
 .cta:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
 .cta-dot { width: 38px; height: 38px; border-radius: 50%; background: var(--teal); display: grid; place-items: center; flex: none; }
 .cta-dot svg { width: 17px; height: 17px; fill: none; stroke: #0A1A16; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* The landing page is only the hero now -- the upload lives on workspace.html
+   -- so centre it instead of letting it hang off the top. Scoped to .landing
+   so classic.html, which shares this sheet, keeps its top-aligned layout. */
+.landing main { min-height: calc(100vh - 72px); display: grid; place-items: center; }
+.landing .hero { padding: 0 0 40px; }
 
 /* ── cards ───────────────────────────────────────────────────────────── */
 .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
