@@ -594,6 +594,45 @@ def _project(u, v):
 
 
 
+
+def _is_projection_claim(topic: str, step, env: Optional[dict] = None) -> bool:
+    """Is this step claiming a projection, whatever the page called the topic?
+
+    `topic` is free text from the vision model: a real upload came back as
+    "Linear Algebra", not "projection", so every check gated on the literal
+    string stayed switched off and a wrong answer passed in silence. The
+    step's own operation is the reliable signal.
+    """
+    if (topic or "").strip().lower().startswith("projection"):
+        return True
+    try:
+        if canonical_op(step.claimed_operation) == "project":
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    # The step that carries the wrong answer is usually the one that ADDS the
+    # pieces together, not one that projects -- so the step's own operation is
+    # not enough. A spanning family plus the vector being projected is the
+    # evidence that this is a projection problem at all.
+    if env is not None and (topic or "").lower() not in _NON_PROJECTION_TOPICS:
+        try:
+            tgt, basis, _ = _projection_setup(env)
+            if tgt is not None and len(basis) >= 2:
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+    return False
+
+
+# Topics whose canonical answer is definitely not a projection, so the
+# env-shape guess below does not hijack them.
+_NON_PROJECTION_TOPICS = (
+    "eigen", "determinant", "inverse", "transpose", "matrix_multiply",
+    "matrix_add", "cross_product", "dot_product", "rref", "solve_system",
+    "span", "norm",
+)
+
+
 def _project_onto_span(b, basis: list) -> "sp.Matrix":
     """Orthogonal projection of b onto span(basis), for ANY basis.
 
@@ -907,18 +946,19 @@ def topic_target(topic: str, env: dict[str, Val]) -> tuple[Optional[Val], str]:
             return wrap(_dot(env["u"].obj, env["v"].obj), kind="scalar"), "the dot product"
         if topic == "cross_product" and "u" in env and "v" in env:
             return wrap(_cross(env["u"].obj, env["v"].obj)), "the cross product"
-        if topic == "projection":
-            # Projection onto a SUBSPACE, which is what "onto W = span{...}"
-            # means. Checked before the single-vector case because a page with
-            # u1, u2 and b has no given called "u" and used to fall through
-            # here entirely -- so nothing was ever compared and a wrong answer
-            # passed.
+        # Projection onto a SUBSPACE, which is what "onto W = span{...}" means.
+        # Not gated on topic == "projection": the model labels real uploads
+        # "Linear Algebra", and a page with u1, u2 and b has no given called
+        # "u" either, so this fell through entirely and nothing was compared.
+        # A spanning family plus one other vector is the evidence instead, and
+        # a topic that names a different operation still wins.
+        if (topic or "").lower() not in _NON_PROJECTION_TOPICS:
             tgt, basis, names = _projection_setup(env)
             if tgt is not None and len(basis) >= 2:
                 return (wrap(_project_onto_span(tgt, basis)),
                         "the projection onto span{" + ", ".join(names) + "}")
-            if "u" in env and "v" in env:
-                return wrap(_project(env["u"].obj, env["v"].obj)), "the projection of u onto v"
+        if topic == "projection" and "u" in env and "v" in env:
+            return wrap(_project(env["u"].obj, env["v"].obj)), "the projection of u onto v"
         if topic == "norm" and "v" in env:
             return wrap(_col(env["v"].obj).norm(), kind="scalar"), "the norm of v"
         if topic == "solve_system" and "A" in env and "b" in env:
@@ -1123,7 +1163,7 @@ def match_signature(S: Val, env: dict[str, Val], expected: Optional[Val], step: 
     # perpendicular. Nothing per-step catches that, so it is caught here, by
     # the property that defines an orthogonal projection -- b minus the
     # projection must be perpendicular to the whole subspace.
-    if topic == "projection" and S.is_matrix:
+    if S.is_matrix and _is_projection_claim(topic, step, env):
         _tgt, _basis, _names = _projection_setup(env)
         if _tgt is not None and len(_basis) >= 2:
             try:
