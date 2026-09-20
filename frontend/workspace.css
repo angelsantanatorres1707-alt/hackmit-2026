@@ -338,3 +338,69 @@
   color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .prob-shown img:not([hidden]) + .prob-statement:not([hidden]) { margin-top: 12px; }
+
+/* ── chat boxes ──────────────────────────────────────────────────────── */
+.chat {
+  position: relative;
+  border: 1px solid var(--line); border-radius: var(--radius-lg);
+  background: var(--bg-2); padding: 12px 14px 10px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.chat + .chat { margin-top: 16px; }
+.chat[hidden] { display: none; }
+.chat:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
+.chat.over { border-color: var(--teal); border-style: dashed; background: var(--teal-soft); }
+.chat.over .chat-drop-hint { display: grid; }
+.chat-drop-hint {
+  display: none; position: absolute; inset: 0; place-items: center;
+  border-radius: var(--radius-lg); background: rgba(246, 249, 250, 0.82);
+  color: var(--teal-ink); font-weight: 600; pointer-events: none;
+}
+
+.chat-text {
+  width: 100%; border: none; background: none; resize: vertical; display: block;
+  padding: 4px 2px 8px; color: var(--text);
+  font-family: var(--font-mono); font-size: 1rem; line-height: 1.6;
+}
+.chat-text:focus { outline: none; }
+.chat-text::placeholder { color: var(--dim); }
+
+.chat-atts { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; padding: 0; }
+.chat-atts[hidden] { display: none; }
+.chat-att { position: relative; width: 62px; height: 62px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
+.chat-att img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.chat-att-kind { display: grid; place-items: center; width: 100%; height: 100%; font-family: var(--font-mono); font-size: 0.72rem; color: var(--slate); }
+.chat-att-x {
+  position: absolute; top: 3px; right: 3px; width: 19px; height: 19px; border-radius: 50%;
+  border: none; background: rgba(16, 24, 28, 0.72); color: #fff; cursor: pointer;
+  font-size: 13px; line-height: 1; display: grid; place-items: center; padding: 0;
+}
+.chat-att-x:hover { background: var(--violet); }
+
+.chat-bar { display: flex; align-items: center; gap: 4px; }
+.chat-spacer { flex: 1; }
+.chat-act {
+  width: 34px; height: 34px; border-radius: 9px; border: none; background: none;
+  cursor: pointer; color: var(--slate); display: grid; place-items: center;
+}
+.chat-act svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.chat-act:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
+.chat-act:disabled { opacity: 0.35; cursor: not-allowed; }
+.chat-act.listening { background: var(--teal-soft); color: var(--teal-ink); }
+.chat-act.listening svg { animation: blip 1.5s ease-in-out infinite; }
+
+.chat-send {
+  padding: 9px 18px; border: none; border-radius: 999px; cursor: pointer;
+  background: var(--ink); color: #fff; white-space: nowrap;
+  font-family: var(--font-body); font-size: 0.95rem; font-weight: 500;
+}
+.chat-send:hover:not(:disabled) { background: #000; }
+.chat-send:disabled { background: var(--panel-2); color: #97A4AA; cursor: not-allowed; }
+
+/* the kept problem */
+.prob-shown { margin-bottom: 16px; }
+.prob-shown-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.prob-shown-label { font-size: 0.86rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); }
+.prob-imgs { display: flex; flex-wrap: wrap; gap: 8px; }
+.prob-imgs img { max-width: 100%; max-height: 240px; border-radius: 9px; display: block; }
+.prob-imgs:empty { display: none; }

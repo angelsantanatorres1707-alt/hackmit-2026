@@ -109,133 +109,12 @@
    *                  quietly dropped.
    */
 
-  function setProblem(next) {
-    if (S.problem && S.problem.url) URL.revokeObjectURL(S.problem.url);
-    S.problem = next;
-    renderProblem();
-    syncRun();
-  }
 
-  function renderProblem() {
-    var input = $('#prob-input');
-    var shown = $('#prob-shown');
-    var img = $('#prob-img');
-    var stmt = $('#prob-statement');
 
-    if (!S.problem) {
-      input.hidden = false;
-      shown.hidden = true;
-      $('#prob-change').hidden = true;
-      return;
-    }
-
-    input.hidden = true;
-    shown.hidden = false;
-    $('#prob-change').hidden = false;
-
-    if (S.problem.url) { img.src = S.problem.url; img.hidden = false; }
-    else { img.removeAttribute('src'); img.hidden = true; }
-
-    if (S.problem.text) { stmt.textContent = S.problem.text; stmt.hidden = false; }
-    else { stmt.textContent = ''; stmt.hidden = true; }
-  }
-
-  function wireProblem() {
-    var file = $('#prob-file');
-    var text = $('#prob-text');
-    var save = $('#prob-save');
-
-    function canSave() { save.disabled = !text.value.trim(); }
-    text.addEventListener('input', canSave);
-
-    $('#prob-browse').addEventListener('click', function () { file.click(); });
-    file.addEventListener('change', function () {
-      var f = file.files && file.files[0];
-      file.value = '';
-      if (!f) return;
-      if (isPdf(f)) { toast('PDFs are not readable yet \u2014 upload a PNG or JPEG of the problem.'); return; }
-      setProblem({ file: f, url: URL.createObjectURL(f), text: text.value.trim() || null });
-    });
-
-    save.addEventListener('click', function () {
-      var v = text.value.trim();
-      if (v) setProblem({ text: v });
-    });
-
-    $('#prob-camera').addEventListener('click', function () { openCamera('problem'); });
-
-    $('#prob-change').addEventListener('click', function () {
-      var keep = (S.problem && S.problem.text) || '';
-      setProblem(null);
-      text.value = keep;
-      canSave();
-    });
-
-    renderProblem();
-  }
 
   /* ── files ─────────────────────────────────────────────────────────── */
 
-  function addFiles(list) {
-    var added = 0;
-    Array.prototype.forEach.call(list, function (f) {
-      if (!f) return;
-      var ok = isPdf(f) || /^image\//.test(f.type) || /\.(hei[cf])$/i.test(f.name || '');
-      if (!ok) return;
-      S.files.push(f);
-      added++;
-    });
-    if (added) renderFiles();
-  }
 
-  function renderFiles() {
-    var ul = $('#ws-files');
-    ul.textContent = '';
-    S.files.forEach(function (f, i) {
-      var li = document.createElement('li');
-      li.className = 'ws-file' + (isPdf(f) ? ' bad' : '');
-
-      var kind = document.createElement('span');
-      kind.className = 'kind';
-      kind.textContent = isPdf(f) ? 'pdf' : ((f.name || '').split('.').pop() || 'img').slice(0, 4);
-
-      var nm = document.createElement('span');
-      nm.className = 'nm';
-      nm.textContent = f.name || 'upload';
-
-      var sz = document.createElement('span');
-      sz.className = 'sz';
-      sz.textContent = kb(f.size);
-
-      var x = document.createElement('button');
-      x.className = 'x';
-      x.type = 'button';
-      x.setAttribute('aria-label', 'Remove ' + (f.name || 'file'));
-      x.textContent = '×';
-      x.addEventListener('click', function () {
-        S.files.splice(i, 1);
-        renderFiles();
-      });
-
-      li.appendChild(kind); li.appendChild(nm); li.appendChild(sz); li.appendChild(x);
-      ul.appendChild(li);
-    });
-
-    // Say the honest thing about PDFs rather than letting the API 502.
-    var pdfs = S.files.filter(isPdf).length;
-    var notice = $('#ws-notice');
-    if (pdfs) {
-      notice.hidden = false;
-      notice.innerHTML =
-        '<b>PDFs are not readable yet.</b> The extractor opens uploads as images ' +
-        '(backend/extract.py), so a PDF will come back as an extraction error. ' +
-        'Export the page as PNG or JPEG for now, or drop a photo of it.';
-    } else {
-      notice.hidden = true;
-    }
-
-    syncRun();
-  }
 
 
   var NOTE_DEFAULT = 'Analysed step by step \u2014 never auto-graded';
@@ -244,22 +123,220 @@
   // alone cannot be analysed: extract.py takes image bytes, and with none it
   // falls through to a bundled sample of somebody else's work. So say what is
   // missing rather than refusing in silence.
-  function syncRun() {
-    var hasFiles = S.files.length > 0;
-    var hasText = $('#ws-prompt').value.trim().length > 0;
-    $('#ws-run').disabled = S.busy || (!hasFiles && !hasText);
 
-    var note = $('#composer-note');
-    if (!hasFiles && !hasText) {
-      note.textContent = S.problem
-        ? 'Problem saved. Now add your work \u2014 a photo, or typed one step per line.'
-        : 'Drop a photo above, or type your working one step per line.';
-      note.classList.remove('is-warn');
-    } else {
-      note.textContent = NOTE_DEFAULT;
-      note.classList.remove('is-warn');
+
+  /* ── chat boxes ────────────────────────────────────────────────────────
+   *
+   * One box each for the problem and for the work. Both take typing, dropped
+   * or pasted images, a file picker, dictation and the camera, so neither has
+   * a separate dropzone any more.
+   */
+
+  var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  function makeChat(root, opts) {
+    var text = root.querySelector('.chat-text');
+    var atts = root.querySelector('.chat-atts');
+    var file = root.querySelector('.chat-file');
+    var send = root.querySelector('.chat-send');
+    var box = { root: root, text: text, files: [], listening: false };
+
+    function render() {
+      atts.textContent = '';
+      box.files.forEach(function (f, i) {
+        var li = document.createElement('li');
+        li.className = 'chat-att';
+        if (/^image\//.test(f.type)) {
+          var im = document.createElement('img');
+          im.src = URL.createObjectURL(f);
+          im.alt = f.name || 'attachment';
+          im.addEventListener('load', function () { URL.revokeObjectURL(im.src); });
+          li.appendChild(im);
+        } else {
+          var tag = document.createElement('span');
+          tag.className = 'chat-att-kind';
+          tag.textContent = (f.name || '').split('.').pop().slice(0, 4).toUpperCase();
+          li.appendChild(tag);
+        }
+        var x = document.createElement('button');
+        x.type = 'button'; x.className = 'chat-att-x';
+        x.setAttribute('aria-label', 'Remove ' + (f.name || 'attachment'));
+        x.textContent = '\u00d7';
+        x.addEventListener('click', function () { box.files.splice(i, 1); render(); sync(); });
+        li.appendChild(x);
+        atts.appendChild(li);
+      });
+      atts.hidden = !box.files.length;
+      pdfNotice();
     }
+
+    function add(list) {
+      var n = 0;
+      Array.prototype.forEach.call(list || [], function (f) {
+        if (!f) return;
+        if (!/^image\//.test(f.type) && !isPdf(f) && !/\.(hei[cf])$/i.test(f.name || '')) return;
+        if (isPdf(f) && !opts.allowPdf) { toast('Upload a PNG or JPEG of the problem.'); return; }
+        box.files.push(f); n++;
+      });
+      if (n) { render(); sync(); }
+    }
+    box.add = add;
+
+    function sync() {
+      var has = box.files.length > 0 || text.value.trim().length > 0;
+      send.disabled = S.busy || !has;
+      if (opts.onSync) opts.onSync(box);
+    }
+    box.sync = sync;
+
+    box.clear = function () { box.files = []; text.value = ''; render(); sync(); };
+
+    text.addEventListener('input', sync);
+    text.addEventListener('keydown', function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (!send.disabled) opts.onSend(box); }
+    });
+    send.addEventListener('click', function () { if (!send.disabled) opts.onSend(box); });
+
+    file.addEventListener('change', function () { add(file.files); file.value = ''; });
+
+    root.addEventListener('paste', function (e) {
+      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length) {
+        e.preventDefault(); add(e.clipboardData.files);
+      }
+    });
+
+    var depth = 0;
+    root.addEventListener('dragenter', function (e) { e.preventDefault(); depth++; root.classList.add('over'); });
+    root.addEventListener('dragover', function (e) { e.preventDefault(); });
+    root.addEventListener('dragleave', function (e) { e.preventDefault(); if (--depth <= 0) root.classList.remove('over'); });
+    root.addEventListener('drop', function (e) {
+      e.preventDefault(); depth = 0; root.classList.remove('over');
+      if (e.dataTransfer && e.dataTransfer.files) add(e.dataTransfer.files);
+    });
+
+    root.querySelector('[data-act="attach"]').addEventListener('click', function () { file.click(); });
+    root.querySelector('[data-act="camera"]').addEventListener('click', function () {
+      if (global.__noemaOpenCamera) global.__noemaOpenCamera(root.dataset.dest);
+      else toast('The camera is not available in this browser.');
+    });
+
+    var voiceBtn = root.querySelector('[data-act="voice"]');
+    if (!Rec) {
+      voiceBtn.disabled = true;
+      voiceBtn.title = 'Dictation needs Chrome or Edge';
+    } else {
+      var rec = new Rec(); rec.continuous = true; rec.interimResults = true; rec.lang = 'en-US';
+      var base = '';
+      rec.addEventListener('result', function (e) {
+        var fin = '', mid = '';
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) fin += e.results[i][0].transcript;
+          else mid += e.results[i][0].transcript;
+        }
+        if (fin) base = (base ? base.replace(/\s*$/, ' ') : '') + fin.trim();
+        text.value = base + (mid ? (base ? ' ' : '') + mid : '');
+        sync();
+      });
+      rec.addEventListener('error', function (e) {
+        stopVoice();
+        toast(e.error === 'not-allowed' ? 'Microphone access was refused.' : 'Dictation stopped: ' + e.error);
+      });
+      rec.addEventListener('end', function () { if (box.listening) { try { rec.start(); } catch (_) { stopVoice(); } } });
+
+      function stopVoice() { box.listening = false; try { rec.stop(); } catch (_) {} voiceBtn.classList.remove('listening'); }
+      voiceBtn.addEventListener('click', function () {
+        if (box.listening) return stopVoice();
+        base = text.value.trim();
+        box.listening = true;
+        try { rec.start(); } catch (_) {}
+        voiceBtn.classList.add('listening');
+      });
+    }
+
+    function pdfNotice() {
+      if (!opts.allowPdf) return;
+      var n = $('#ws-notice');
+      if (box.files.some(isPdf)) {
+        n.hidden = false;
+        n.innerHTML = '<b>PDFs are not readable yet.</b> The extractor opens uploads as ' +
+                      'images (backend/extract.py), so a PDF comes back as an extraction ' +
+                      'error. Export the page as PNG or JPEG for now.';
+      } else { n.hidden = true; }
+    }
+
+    render(); sync();
+    return box;
   }
+
+
+  /* ── the two boxes ─────────────────────────────────────────────────── */
+
+  var problemBox = null;
+  var workBox = null;
+
+  function showProblem() {
+    var shown = $('#prob-shown');
+    var imgs = $('#prob-imgs');
+    var stmt = $('#prob-statement');
+    imgs.textContent = '';
+
+    if (!S.problem) { shown.hidden = true; $('#chat-problem').hidden = false; return; }
+
+    shown.hidden = false;
+    $('#chat-problem').hidden = true;
+
+    (S.problem.files || []).forEach(function (f) {
+      var im = document.createElement('img');
+      im.src = URL.createObjectURL(f);
+      im.alt = 'The problem you uploaded';
+      imgs.appendChild(im);
+    });
+    if (S.problem.text) { stmt.textContent = S.problem.text; stmt.hidden = false; }
+    else { stmt.textContent = ''; stmt.hidden = true; }
+  }
+
+  function wireChats() {
+    problemBox = makeChat($('#chat-problem'), {
+      allowPdf: false,
+      onSend: function (box) {
+        S.problem = { text: box.text.value.trim() || null, files: box.files.slice() };
+        box.clear();
+        showProblem();
+        if (workBox) workBox.sync();
+      },
+    });
+
+    workBox = makeChat($('#chat-work'), {
+      allowPdf: true,
+      onSend: function () { run(); },
+      onSync: function (box) {
+        var note = $('#composer-note');
+        var has = box.files.length || box.text.value.trim();
+        note.textContent = has
+          ? 'Analysed step by step \u2014 never auto-graded'
+          : (S.problem ? 'Problem saved. Now add your work \u2014 a photo, or typed one step per line.'
+                       : 'Drop a screenshot in, or type your working one step per line.');
+      },
+    });
+
+    $('#prob-change').addEventListener('click', function () {
+      var keep = S.problem;
+      S.problem = null;
+      showProblem();
+      if (keep) {
+        if (keep.text) problemBox.text.value = keep.text;
+        if (keep.files && keep.files.length) problemBox.add(keep.files);
+        problemBox.sync();
+      }
+      if (workBox) workBox.sync();
+    });
+
+    showProblem();
+  }
+
+  // the rest of the app still asks these two questions
+  function syncRun() { if (workBox) workBox.sync(); }
+  function currentWorkFiles() { return workBox ? workBox.files : []; }
 
   /* ── the conversation log ──────────────────────────────────────────── */
 
@@ -278,7 +355,8 @@
 
   function run() {
     if (S.busy) return;
-    var note = $('#ws-prompt').value.trim();
+    var note = workBox ? workBox.text.value.trim() : '';
+    S.files = currentWorkFiles();
 
     // No photo, but something typed: parse it into the extraction schema and
     // use the API's no-vision path. Nothing is sent until it parses.
@@ -291,8 +369,7 @@
       if (!parsed.ok) {
         log('you', note, true);
         log('noema', parsed.error);
-        $('#ws-prompt').value = '';
-        syncRun();
+        workBox.clear();
         toast(parsed.error);
         return;
       }
@@ -300,7 +377,7 @@
       parsed.notes.forEach(function (n) { log('noema', n); });
       log('noema', 'Read ' + parsed.steps.length + ' step' +
                    (parsed.steps.length > 1 ? 's' : '') + ' from what you typed. Checking them\u2026');
-      $('#ws-prompt').value = '';
+      workBox.clear();
       syncRun();
       start(api('/api/analyze', {
         method: 'POST',
@@ -311,13 +388,13 @@
     }
 
     var fd = new FormData();
-    if (S.problem && S.problem.file) {
-      // The problem page goes first: extract.py reads the problem off the page.
-      fd.append('images', S.problem.file, S.problem.file.name || 'problem.jpg');
-    }
+    (S.problem && S.problem.files ? S.problem.files : []).forEach(function (f) {
+      // The problem pages go first: extract.py reads the problem off the page.
+      fd.append('images', f, f.name || 'problem.jpg');
+    });
     S.files.forEach(function (f) { fd.append('images', f, f.name || 'page.jpg'); });
     if (note) fd.append('problem_note', note);
-    if (S.problem && S.problem.text && !S.problem.file) {
+    if (S.problem && S.problem.text && !(S.problem.files && S.problem.files.length)) {
       log('noema', 'Noting your typed problem for reference. It cannot be sent with a ' +
                    'photo \u2014 the upload route has no field for it \u2014 so the check ' +
                    'runs against what is on the page.');
@@ -325,7 +402,7 @@
 
     if (note) {
       log('you', note, true);
-      $('#ws-prompt').value = '';
+      workBox.clear();
     }
     log('noema', 'Reading ' + S.files.length + ' page' + (S.files.length > 1 ? 's' : '') + '…');
 
@@ -335,8 +412,7 @@
   function runFixture(name, title) {
     if (S.busy) return;
     S.files = [];
-    renderFiles();
-    log('you', 'Run the bundled sample: ' + title, true);
+      log('you', 'Run the bundled sample: ' + title, true);
     start(api('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -532,166 +608,63 @@
 
   /* ── input wiring ──────────────────────────────────────────────────── */
 
-  function wireInput() {
-    var drop = $('#ws-drop');
-    var input = $('#ws-file');
-
-    $('#ws-browse').addEventListener('click', function (e) {
-      e.stopPropagation();
-      input.click();
-    });
-    drop.addEventListener('click', function () { input.click(); });
-    drop.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
-    });
-    input.addEventListener('change', function () {
-      addFiles(input.files);
-      input.value = '';
-    });
-
-    ['dragenter', 'dragover'].forEach(function (t) {
-      drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); });
-    });
-    ['dragleave', 'drop'].forEach(function (t) {
-      drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); });
-    });
-    drop.addEventListener('drop', function (e) {
-      if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
-    });
-
-    window.addEventListener('paste', function (e) {
-      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length) {
-        addFiles(e.clipboardData.files);
-      }
-    });
-
-    $('#ws-run').addEventListener('click', run);
-    $('#ws-prompt').addEventListener('input', syncRun);
-    $('#ws-prompt').addEventListener('keydown', function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        run();
-      }
-    });
-  }
 
 
   /* ── voice: Web Speech API, the same one the classic flow dictates with ─ */
 
-  function wireVoice() {
-    var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    var btn = $('#mode-voice');
-
-    if (!Rec) {
-      btn.disabled = true;
-      btn.title = 'Dictation uses the Web Speech API — Chrome or Edge. Typing works everywhere.';
-      return;
-    }
-
-    var rec = new Rec();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = 'en-US';
-
-    var base = '';
-    var on = false;
-
-    rec.addEventListener('result', function (e) {
-      var fin = '', interim = '';
-      for (var i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) fin += e.results[i][0].transcript;
-        else interim += e.results[i][0].transcript;
-      }
-      if (fin) base = (base ? base.replace(/\s*$/, ' ') : '') + fin.trim();
-      $('#ws-prompt').value = base + (interim ? (base ? ' ' : '') + interim : '');
-    });
-    rec.addEventListener('error', function (e) {
-      stop();
-      toast(e.error === 'not-allowed'
-        ? 'Microphone access was refused.'
-        : 'Dictation stopped: ' + e.error);
-    });
-    rec.addEventListener('end', function () { if (on) { try { rec.start(); } catch (_) { stop(); } } });
-
-    function start() {
-      base = $('#ws-prompt').value.trim();
-      on = true;
-      try { rec.start(); } catch (_) { /* already running */ }
-      btn.classList.add('listening');
-      setMode('voice');
-    }
-    function stop() {
-      on = false;
-      try { rec.stop(); } catch (_) {}
-      btn.classList.remove('listening');
-      setMode('text');
-    }
-
-    btn.addEventListener('click', function () { if (on) stop(); else start(); });
-  }
 
   /* ── camera: getUserMedia -> canvas -> a File in the same queue ───────── */
 
   var camDest = 'work';
 
+  /* One camera, shared by both boxes. The shot lands in whichever box opened
+     it, which is why the destination is passed in rather than assumed. */
   function wireCamera() {
-    var btn = $('#mode-camera');
     var panel = $('#cam');
     var video = $('#cam-video');
     var stream = null;
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      btn.disabled = true;
-      btn.title = 'This browser has no camera API.';
+      global.__noemaOpenCamera = function () { toast('This browser has no camera API.'); };
       return;
     }
 
     function close() {
-      if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+      if (stream) { stream.getTracks().forEach(function (tr) { tr.stop(); }); stream = null; }
       video.srcObject = null;
       panel.hidden = true;
-      $('#ws-drop').hidden = false;
-      setMode('text');
+      camDest = 'work';
     }
-
-    global.__noemaOpenCamera = function (dest) { camDest = dest || 'work'; if (!stream) open(); };
 
     function open() {
       navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
         .then(function (st) {
-          stream = st;
-          video.srcObject = st;
-          video.play();
-          panel.hidden = false;
-          $('#ws-drop').hidden = true;
-          setMode('camera');
+          stream = st; video.srcObject = st; video.play(); panel.hidden = false;
         })
         .catch(function (err) {
-          toast(err && err.name === 'NotAllowedError'
-            ? 'Camera access was refused.'
-            : 'No camera available.');
-          setMode('text');
+          toast(err && err.name === 'NotAllowedError' ? 'Camera access was refused.' : 'No camera available.');
+          close();
         });
     }
 
-    btn.addEventListener('click', function () { camDest = 'work'; if (stream) close(); else open(); });
+    global.__noemaOpenCamera = function (dest) {
+      camDest = dest || 'work';
+      if (stream) close(); else open();
+    };
+
     $('#cam-stop').addEventListener('click', close);
     $('#cam-shot').addEventListener('click', function () {
       if (!stream || !video.videoWidth) return;
       var c = document.createElement('canvas');
-      c.width = video.videoWidth;
-      c.height = video.videoHeight;
+      c.width = video.videoWidth; c.height = video.videoHeight;
       c.getContext('2d').drawImage(video, 0, 0);
+      var dest = camDest;
       c.toBlob(function (blob) {
         if (!blob) return;
         var name = 'camera-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.jpg';
         var shot = new File([blob], name, { type: 'image/jpeg' });
-        if (camDest === 'problem') {
-          setProblem({ file: shot, url: URL.createObjectURL(shot), text: $('#prob-text').value.trim() || null });
-        } else {
-          addFiles([shot]);
-        }
-        camDest = 'work';
+        var box = dest === 'problem' ? problemBox : workBox;
+        if (box) box.add([shot]);
         close();
       }, 'image/jpeg', 0.92);
     });
@@ -705,18 +678,11 @@
     });
   }
 
-  function openCamera(dest) {
-    if (global.__noemaOpenCamera) global.__noemaOpenCamera(dest);
-    else toast('The camera is not available in this browser.');
-  }
 
   /* ── go ────────────────────────────────────────────────────────────── */
 
-  wireInput();
   wireTransport();
-  wireVoice();
   wireCamera();
-  wireProblem();
-  renderFiles();
+  wireChats();
   loadHealth();
 })(window);
