@@ -164,6 +164,121 @@ CASES = [
         ],
     },
     {
+        "name": "product in the wrong order (BA instead of AB)",
+        "expect_wrong": "s2",
+        "answer_tokens": ["0 -1", "3 0"],  # AB, the value they should have reached
+        "problem": problem("Compute AB.", "matrix_multiply", "AB",
+                           [given("A", mat([[0, -1], [1, 0]])),
+                            given("B", mat([[3, 0], [0, 1]]))]),
+        "steps": [
+            step(1, "A = [0 -1 ; 1 0]   B = [3 0 ; 0 1]", mat([[0, -1], [1, 0]])),
+            step(2, "AB = [0 -3 ; 1 0]", mat([[0, -3], [1, 0]]),
+                 op="multiply", final=True),
+        ],
+    },
+    {
+        "name": "dot product, one term dropped",
+        "expect_wrong": "s2",
+        "answer_tokens": ["23"],
+        "problem": problem("Compute u . v.", "dot_product", "u . v",
+                           [given("u", vec(3, 4)), given("v", vec(5, 2))]),
+        "steps": [
+            step(1, "u = (3,4)   v = (5,2)", vec(3, 4)),
+            step(2, "u . v = 3(5) = 15", scalar(15.0), op="dot", final=True),
+        ],
+    },
+    {
+        "name": "normalize without dividing by the length",
+        "expect_wrong": "s3",
+        "answer_tokens": ["0.6", "0.8"],
+        "problem": problem("Find the unit vector along v.", "norm", "unit vector",
+                           [given("v", vec(3, 4))]),
+        "steps": [
+            step(1, "v = (3,4)", vec(3, 4)),
+            step(2, "||v|| = 5", scalar(5.0), op="normalize"),
+            step(3, "v_hat = (3,4)", vec(3, 4), op="normalize", final=True),
+        ],
+    },
+    {
+        "name": "transpose, rows and columns not swapped",
+        "expect_wrong": "s2",
+        "answer_tokens": ["1 3", "2 4"],
+        "problem": problem("Find A transpose.", "transpose", "A^T",
+                           [given("A", mat([[1, 2], [3, 4]]))]),
+        "steps": [
+            step(1, "A = [1 2 ; 3 4]", mat([[1, 2], [3, 4]])),
+            step(2, "A^T = [1 2 ; 3 4]", mat([[1, 2], [3, 4]]),
+                 op="transpose", final=True),
+        ],
+    },
+    {
+        "name": "3x3 determinant computed wrong",
+        "expect_wrong": "s2",
+        "answer_tokens": ["-3"],
+        "problem": problem("Compute det A.", "determinant", "det A",
+                           [given("A", mat([[1, 2, 3], [4, 5, 6], [7, 8, 10]]))]),
+        "steps": [
+            step(1, "A = [1 2 3 ; 4 5 6 ; 7 8 10]",
+                 mat([[1, 2, 3], [4, 5, 6], [7, 8, 10]])),
+            step(2, "det A = 12", scalar(12.0),
+                 op="determinant_expand", final=True),
+        ],
+    },
+    {
+        "name": "five steps, error in the MIDDLE not the end",
+        # The projection is botched at step 3; steps 4 and 5 faithfully carry
+        # the bad value forward. The FIRST wrong step is what must be blamed.
+        "expect_wrong": "s3",
+        "answer_tokens": ["1.6", "3.2"],
+        "problem": problem("Find proj_v(u).", "projection", "proj_v(u)",
+                           [given("u", vec(2, 3)), given("v", vec(1, 2))]),
+        "steps": [
+            step(1, "u = (2,3)   v = (1,2)", vec(2, 3)),
+            step(2, "u . v = 2(1) + 3(2) = 8", scalar(8.0), op="dot"),
+            step(3, "proj = 8(1,2) = (8,16)", vec(8, 16), op="project"),
+            step(4, "so proj = (8,16)", vec(8, 16)),
+            step(5, "answer: (8,16)", vec(8, 16), op="state_answer", final=True),
+        ],
+    },
+    {
+        "name": "CONTROL: correct multi-step projection",
+        "expect_wrong": None,
+        "answer_tokens": [],
+        "problem": problem("Find proj_v(u).", "projection", "proj_v(u)",
+                           [given("u", vec(2, 3)), given("v", vec(1, 2))]),
+        "steps": [
+            step(1, "u = (2,3)   v = (1,2)", vec(2, 3)),
+            step(2, "u . v = 8", scalar(8.0), op="dot"),
+            step(3, "v . v = 5", scalar(5.0), op="dot"),
+            step(4, "proj = (8/5)(1,2) = (1.6, 3.2)", vec(1.6, 3.2),
+                 op="project", final=True),
+        ],
+    },
+    {
+        "name": "CONTROL: correct determinant",
+        "expect_wrong": None,
+        "answer_tokens": [],
+        "problem": problem("Compute det A.", "determinant", "det A",
+                           [given("A", mat([[3, 5], [2, 4]]))]),
+        "steps": [
+            step(1, "A = [3 5 ; 2 4]", mat([[3, 5], [2, 4]])),
+            step(2, "det A = 12 - 10 = 2", scalar(2.0),
+                 op="determinant", final=True),
+        ],
+    },
+    {
+        "name": "CONTROL: correct eigenvector, written scaled",
+        "expect_wrong": None,
+        "answer_tokens": [],
+        "problem": problem("Give an eigenvector of A.", "eigen", "eigenvector",
+                           [given("A", mat([[2, 1], [1, 2]]))]),
+        "steps": [
+            step(1, "A = [2 1 ; 1 2]", mat([[2, 1], [1, 2]])),
+            step(2, "v = (3,3) is an eigenvector", vec(3, 3),
+                 op="eigenvector", final=True),
+        ],
+    },
+    {
         "name": "CONTROL: a correct derivation",
         # Nothing wrong here. The app must not invent an error.
         "expect_wrong": None,

@@ -681,10 +681,33 @@ def canonical_op(op: str) -> str:
     return _OP_ALIASES.get(op, op)
 
 
+def _symbols_in_text(text: str, env: dict[str, Val]) -> list[str]:
+    """Operand names the student actually wrote, in order of appearance.
+
+    Positional defaults alone made "v . v = 5" look like "u . v", so a student
+    doing CORRECT work was told step 3 was wrong -- as damaging as missing a
+    real error. Read the left-hand side instead: everything before the first
+    "=" is the expression, and what follows is the value they claim for it.
+    """
+    lhs = text.split("=", 1)[0] if "=" in text else text
+    found: list[str] = []
+    for tok in re.findall(r"[A-Za-z_][A-Za-z_0-9]*", lhs):
+        if tok in env:
+            found.append(tok)
+        elif len(tok) > 1 and all(ch in env for ch in tok):
+            found.extend(tok)          # "AB" is A then B, not a symbol named AB
+    return found
+
+
 def _syms(step: Step, env: dict[str, Val]) -> list[str]:
     given = [s for s in (step.op_args.source_symbols or []) if s in env]
     if given:
         return given
+    # What they wrote beats what the operation usually takes.
+    for text in (step.claimed_expression or "", step.raw_text or ""):
+        from_text = _symbols_in_text(text, env)
+        if from_text:
+            return from_text
     op = canonical_op(step.claimed_operation)
     named = [s for s in _OP_SYMBOL_DEFAULTS.get(op, []) if s in env]
     if named:
@@ -742,6 +765,15 @@ def expected_for(step: Step, env: dict[str, Val], topic: str) -> tuple[Optional[
         if op == "normalize" and syms:
             v = _col(env[syms[0]].obj)
             if v.norm() != 0:
+                # "||v|| = 5" and "v_hat = (0.6,0.8)" are different claims that
+                # both land here (the extractor has one enum value for both, and
+                # students write both). Branch on what they claimed: a scalar is
+                # the LENGTH, a vector is the unit vector. Conflating them
+                # blamed a correct "||v|| = 5" for not being a unit vector.
+                claimed_kind = getattr(step.value, "kind", None)
+                if claimed_kind in ("scalar", "scalar_list"):
+                    return (wrap(v.norm(), kind="scalar"),
+                            f"the length of {syms[0]}")
                 return wrap(v / v.norm()), f"the unit vector along {syms[0]}"
         if op == "char_poly" and syms:
             coeffs = list(sp.Poly(env[syms[0]].obj.charpoly(LAM).as_expr(), LAM).all_coeffs())
@@ -1340,9 +1372,25 @@ def _load_bearing(result: StepResult, results: list[StepResult], steps: list[Ste
         return True
     final = to_sympy(ext.final_answer.object)
     if final is None:
-        # No stated final answer: the last non-crossed-out parseable step carries the work.
+        # No separately stated final answer. Treating ONLY the last live step as
+        # load-bearing meant an error in the MIDDLE of a derivation was always
+        # dismissed as scratch work and the blame moved to the last line -- the
+        # opposite of "where did the reasoning break". Fall back to the value the
+        # student themselves marked as their answer (else the last live step's)
+        # and let the normal test below decide.
         live = [r for r in results if r.status in (OK, WRONG, UNCHECKED)]
-        return bool(live) and live[-1].index == result.index
+        if not live:
+            return False
+        if live[-1].index == result.index:
+            return True
+        marked = [r for r in live if steps[r.index].is_final_answer]
+        source = marked[-1] if marked else live[-1]
+        final = source.claimed.obj if source.claimed is not None else None
+        if final is None:
+            # Nothing to compare against; anything later depends on this step.
+            return bool([r for r in results
+                         if r.index > result.index and r.status in (OK, WRONG)])
+        final = source.claimed
     if result.claimed is not None and compare(result.claimed, final) in ("eq", "rounding"):
         return True
     # Everything after it either passed (i.e. was derived from it) or was unreadable.
