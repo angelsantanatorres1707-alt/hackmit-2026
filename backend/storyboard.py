@@ -86,6 +86,9 @@ class Storyboard:
     scene: str = ""
     params: dict = field(default_factory=dict)
     problems: list[str] = field(default_factory=list)
+    # True when the planner could not read this scene's parameters at all, so
+    # `problems` describes the planner's blindness rather than the scene's.
+    inapplicable: bool = False
 
     @property
     def ok(self) -> bool:
@@ -103,6 +106,7 @@ class Storyboard:
             "fallback": self.fallback,
             "scene": self.scene,
             "contract_problems": self.problems,
+            "inapplicable": self.inapplicable,
         }
 
 
@@ -356,4 +360,20 @@ def build(verdict, ext, scene: str, params: dict) -> Optional[Storyboard]:
         return Storyboard(concept=concept or "?", teaching_goal="", visual_contrast="",
                           problems=[f"planner raised: {type(exc).__name__}: {exc}"])
     sb.problems = check(sb)
+    # Each planner reads the parameters of the scene it was written for.
+    # Handed a different scene's parameters it comes back missing the pieces it
+    # reads, and `check` reads those gaps as a refusal -- condemning a scene it
+    # never actually looked at. _plan_order wants
+    # CompositionOrderVector's `vector`/`student_symbols`; give it
+    # GridTransformCompare's basis-vector parameters and it fails its own
+    # contract every time, which is how LA02 -- the flagship "you multiplied in
+    # the other order" sample -- ended up as a still frame.
+    #
+    # A check that never ran is not a verdict. Each planner already says so in
+    # its own words -- `_arithmetic` returns "cannot check: ..." when the data
+    # it needs is absent -- so key on that rather than guessing. A scene that
+    # really cannot make its point still fails normally: its arithmetic runs
+    # and disagrees, which is a different sentence entirely.
+    if any(str(x).startswith("cannot check") for x in sb.problems):
+        sb.inapplicable = True
     return sb

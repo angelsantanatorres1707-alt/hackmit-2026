@@ -678,7 +678,13 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
         sb = sb_mod.build(verdict, ext, template, params)
         if sb is not None:
             board = sb.json()
-            if not sb.ok:
+            if sb.inapplicable:
+                # The contract never actually ran against this scene, so it has
+                # no standing to demote it. Keep what was chosen.
+                notes.append(f"storyboard for {sb.concept} does not read "
+                             f"{template}'s parameters; keeping {template} "
+                             f"rather than demoting on a check that never ran")
+            elif not sb.ok:
                 notes.append(f"storyboard for {sb.concept} fails its visual "
                              f"contract: {'; '.join(sb.problems)}")
                 if fallback:
