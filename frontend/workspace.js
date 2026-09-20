@@ -70,33 +70,23 @@
     return f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
   }
 
-  /* ── status chips ──────────────────────────────────────────────────── */
+  /* ── render quality ────────────────────────────────────────────────── */
 
   var FPS_BY_QUALITY = {
     low_quality: 15, medium_quality: 30, high_quality: 60,
     production_quality: 60, fourk_quality: 60,
   };
 
-  function setChip(id, cls, value) {
-    var el = $(id);
-    el.className = 'ws-chip ' + cls;
-    el.querySelector('b').textContent = value;
-  }
 
+  // The only thing still read from health is the frame rate, which the
+  // transport's frame counter needs; guessing 30 would be wrong at other
+  // render qualities.
   function loadHealth() {
     api('/api/health').then(function (h) {
-      if (h.fixture_mode) setChip('#chip-extract', 'warn', 'fixture');
-      else if (h.vision && h.vision.active) setChip('#chip-extract', 'ok', String(h.vision.active));
-      else setChip('#chip-extract', 'warn', 'no key');
-
-      var tpl = (h.scene_templates || []).length;
-      setChip('#chip-engine', tpl ? 'ok' : 'bad', tpl ? 'ready' : 'unavailable');
       S.fps = FPS_BY_QUALITY[h.render_quality] || 30;
-      $('#viz-badge').textContent = (h.render_quality || 'manim').replace('_quality', '') + ' · ' + S.fps + ' fps';
-    }).catch(function () {
-      setChip('#chip-extract', 'bad', 'offline');
-      setChip('#chip-engine', 'bad', 'offline');
-    });
+      $('#viz-badge').textContent =
+        (h.render_quality || 'manim').replace('_quality', '') + ' \u00b7 ' + S.fps + ' fps';
+    }).catch(function () { /* the badge keeps its default; nothing else depends on it */ });
   }
 
   function loadSamples() {

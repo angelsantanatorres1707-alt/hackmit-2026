@@ -24,19 +24,6 @@
 }
 .ws-brand { display: block; flex: none; }
 .ws-brand img { height: 40px; width: auto; display: block; }
-.ws-chips { margin-left: auto; display: flex; gap: 10px; flex: none; }
-.ws-chip {
-  display: inline-flex; align-items: center; gap: 9px;
-  font-size: 0.82rem; font-weight: 600; letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--slate);
-  padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px;
-  background: var(--bg); white-space: nowrap;
-}
-.ws-chip b { color: var(--text); font-weight: 500; }
-.ws-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: none; }
-.ws-chip.ok i    { background: var(--teal); }
-.ws-chip.warn i  { background: #E0A106; }
-.ws-chip.bad i   { background: var(--violet); }
 
 /* ── the two panes ───────────────────────────────────────────────────── */
 .ws {
