@@ -47,8 +47,11 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # take images - override with OPENAI_MODEL. `python -m backend.vision_providers`
 # lists what a given key can actually reach.
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
-OPENAI_URL = "https://api.openai.com/v1/chat/completions"
-OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
+# Overridable so the request/response path can be exercised against a local
+# mock, and so an Azure/proxy/compatible endpoint works without a code change.
+OPENAI_BASE = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+OPENAI_URL = f"{OPENAI_BASE}/chat/completions"
+OPENAI_MODELS_URL = f"{OPENAI_BASE}/models"
 
 
 class ProviderError(RuntimeError):

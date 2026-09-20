@@ -319,10 +319,11 @@ class Env:
         return list(self._regs)
 
     def fresh(self, preferred: Iterable[str]) -> str:
-        for name in preferred:
-            if name and name not in self._regs:
+        names = [str(n) for n in preferred if n]
+        for name in names:
+            if name not in self._regs:
                 return name
-        base = list(preferred)[0] if list(preferred) else "t"
+        base = names[-1] if names else "t"   # "c2", never "2"
         i = 2
         while f"{base}{i}" in self._regs:
             i += 1
@@ -909,11 +910,17 @@ def _invariant_and_divergence(kind: str, args: dict, extras: dict, env: Env,
                      "residual_from": None, "right_angle_at": None})
         return None, None
 
-    if kind == "define_vector":
-        return None, {"absurdity": "none", "compare_to": None,
-                      "residual_from": None, "right_angle_at": None,
-                      "ghost_given": extras.get("label")
-                      if extras.get("label") in env else None}
+    if kind in ("define_vector", "define_matrix"):
+        # The ONE case that may draw a second object: a mis-copied given. The
+        # problem statement is public, so holding a ghost at the printed value
+        # discloses nothing. A DERIVED claim gets no ghost -- there is nothing
+        # public to compare it with, and inventing one would be the leak.
+        label = extras.get("label")
+        if not extras.get("claimed") and label in (ctx.get("given_symbols") or ()):
+            return None, {"absurdity": "none", "compare_to": None,
+                          "residual_from": None, "right_angle_at": None,
+                          "ghost_given": label}
+        return None, None
 
     return None, None
 
@@ -1055,6 +1062,8 @@ _HINTS = {
     "row_op": "watch the crossing point while the line sweeps",
     "define_vector": "check this against the vector printed in the question",
     "define_matrix": "check this against the matrix printed in the question",
+    "define_vector.claimed": "watch whether this arrow stays on its own line",
+    "define_matrix.claimed": "watch what this map does to the grid",
     "scalar_value": "look again at the line the caret marks",
     "literal": "look again at the line the caret marks",
 }
@@ -1063,8 +1072,10 @@ DEFAULT_HINT = "watch the step the caret marks"
 
 def _default_hint(steps: list[dict]) -> str:
     for s in steps:
-        if s.get("first_wrong"):
-            return _HINTS.get(s["kind"], DEFAULT_HINT)
+        if not s.get("first_wrong"):
+            continue
+        key = s["kind"] + (".claimed" if s.get("claimed") else "")
+        return _HINTS.get(key) or _HINTS.get(s["kind"], DEFAULT_HINT)
     return DEFAULT_HINT
 
 
@@ -1175,6 +1186,7 @@ def compile_replay(ext: Any, verdict: Any = None, *, title: Optional[str] = None
     )
 
     ctx = _context(ext)
+    ctx["given_symbols"] = tuple(givens)
     ctx["system_of"] = next((r.symbol for r in env.of_kind("matrix")), None)
 
     steps: list[dict] = []
@@ -1361,10 +1373,7 @@ def _mark_first_wrong(steps: list[dict], env: Env, ctx: dict,
         v = s["args"].get("v")
         other = next((p for p in pair if p and p != v), None)
         local["projected_of"] = other
-    inv, div = _invariant_and_divergence(s["kind"], s["args"],
-                                         {k: s.get(k) for k in
-                                          ("factors", "label", "k", "result")},
-                                         env, local)
+    inv, div = _invariant_and_divergence(s["kind"], s["args"], s, env, local)
     if inv is not None and _invariant_ok(inv, env):
         s["invariant"] = inv
     elif inv is not None:
