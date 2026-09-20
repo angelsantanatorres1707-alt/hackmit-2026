@@ -897,6 +897,8 @@ def _coordinate_target(step: Step, env: dict[str, Val]) -> Optional[Val]:
         return None
 
 
+_CONNECTIVE = re.compile(
+    r"^(?:so|then|thus|hence|therefore|and|finally|now)\b[\s,:]*", re.I)
 _EXPR_CHARS = re.compile(r"^[0-9A-Za-z_+\-*/^().\s]+$")
 
 
@@ -928,6 +930,10 @@ def _lhs_expression(step: Step, env: dict[str, Val]) -> Optional[str]:
     if "=" not in text:
         return None
     lhs = text.split("=", 1)[0].strip()
+    # "Therefore BAv = (0,1)" is the same claim as "BAv = (0,1)". Students
+    # write the connective far more often than not, and it was enough to stop
+    # the line being parsed as an expression at all.
+    lhs = _CONNECTIVE.sub("", lhs).strip()
     if not lhs or len(lhs) > 60 or not _EXPR_CHARS.match(lhs):
         return None
     names = re.findall(r"[A-Za-z_][A-Za-z_0-9]*", lhs)

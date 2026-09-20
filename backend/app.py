@@ -189,14 +189,25 @@ def analyze_extraction(ext: Extraction, meta: dict, *, wait: bool, quality: Opti
 
             j = judge_mod.judge(ext, verdict)
             if j is not None:
-                step = sorted(ext.steps, key=lambda s: (s.page, s.reading_order))[j.step_index]
-                verdict.first_error_index = j.step_index
-                verdict.step_id = j.step_id
-                verdict.student_label = step.student_label
-                verdict.error_id = j.error_id
-                verdict.confidence = j.confidence
-                verdict.flags = ["load_bearing", "judged"]
-                verdict.notes.append(f"judged: {j.misconception}")
+                where = f" ({j.student_expression} for {j.requested_expression})" \
+                    if j.student_expression else ""
+                if j.advisory:
+                    # Recorded for us, shown to nobody. A diagnosis we could not
+                    # check structurally, or one the model hedged on, must not
+                    # put a red mark on someone's homework.
+                    verdict.notes.append(
+                        f"advisory ({j.claim_kind}, {j.confidence}, not applied: "
+                        f"{j.advisory_reason}): {j.misconception}{where}"
+                    )
+                else:
+                    step = sorted(ext.steps, key=lambda s: (s.page, s.reading_order))[j.step_index]
+                    verdict.first_error_index = j.step_index
+                    verdict.step_id = j.step_id
+                    verdict.student_label = step.student_label
+                    verdict.error_id = j.error_id
+                    verdict.confidence = j.confidence
+                    verdict.flags = ["load_bearing", "judged", j.claim_kind]
+                    verdict.notes.append(f"judged ({j.claim_kind}): {j.misconception}{where}")
         except Exception as exc:  # noqa: BLE001
             crashes.append(f"could not ask for a second opinion ({type(exc).__name__}: {exc})")
 
