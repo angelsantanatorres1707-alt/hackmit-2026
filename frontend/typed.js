@@ -149,6 +149,10 @@
   }
 
   /* parse(text) -> {ok, problem, givens, steps, notes[]} */
+  // The last bracketed matrix or parenthesised tuple on a line, allowing a
+  // full stop after it.
+  var TAIL_VALUE_RE = /(\[[^\]]*\]|\((?:\s*-?\d+(?:\.\d+)?(?:\s*\/\s*-?\d+)?\s*,)+\s*-?\d+(?:\.\d+)?(?:\s*\/\s*-?\d+)?\s*\))\s*\.?\s*$/;
+
   function parse(text) {
     var lines = String(text || '').split(/\n+/).map(function (l) { return l.trim(); })
                                   .filter(Boolean);
@@ -168,6 +172,14 @@
       var eq = line.indexOf('=');
       if (eq === -1) {
         var bare = parseValue(line);
+        if (!bare) {
+          // Prose that still carries a claim -- "proj of v onto the x axis is
+          // (0,2)" -- is work, not commentary. Keep the sentence as what they
+          // wrote and lift the value out of the end of it, instead of filing
+          // the whole line as unreadable and rendering nothing.
+          var tail = line.match(TAIL_VALUE_RE);
+          if (tail) bare = parseValue(tail[1]);
+        }
         if (bare) {
           order++;
           steps.push(mkStep(order, label, line, null, bare, true));
@@ -291,7 +303,26 @@
   var OUT_OF_SCOPE = ['derivative', 'differentiate', 'integral', 'integrate',
                       'calculus', 'limit', 'chain rule', 'taylor'];
 
-  function isQuestion(text) { return !/[=\[\]]/.test(String(text || '')); }
+  /* Is this a question to answer, or work to check?
+   *
+   * The old test was "no = and no brackets means a question", which sent every
+   * typed solution written in prose -- "proj of v onto the x axis is (0,2)" --
+   * down the ask-for-an-upload path, so it could never produce a video. A line
+   * carrying an equation, a vector or a matrix is WORK, whatever words are
+   * wrapped around it; a line that opens interrogatively, or ends in a question
+   * mark, or carries no numbers at all, is a question.
+   */
+  var TUPLE_RE = /\(\s*-?\d+(?:\.\d+)?(?:\s*,\s*-?\d+(?:\.\d+)?)+\s*\)/;
+  var ASKING_RE = /^\s*(?:how|what|why|when|which|who|where|can|could|would|should|do|does|did|is|are|explain|help|show|tell|walk|give|teach)\b/i;
+
+  function isQuestion(text) {
+    var t = String(text || '').trim();
+    if (!t) return true;
+    if (/\?\s*$/.test(t)) return true;             // asked outright
+    if (/[=\[\]]/.test(t) || TUPLE_RE.test(t)) return false;   // carries a claim
+    if (ASKING_RE.test(t)) return true;
+    return !/\d/.test(t);                          // no numbers: nothing to check
+  }
 
   /* whatToAsk(question, problem) -> {ask} | {outOfScope, term} */
   function whatToAsk(question, problem) {
