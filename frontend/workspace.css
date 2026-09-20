@@ -346,7 +346,9 @@
   background: var(--bg-2); padding: 12px 14px 10px;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.chat + .chat { margin-top: 14px; }
+/* Gap taken out of the boxes, not added to the column, so the pair still
+   fits a laptop screen without scrolling. */
+.chat + .chat { margin-top: 34px; }
 .chat[hidden] { display: none; }
 .chat:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
 .chat.over { border-color: var(--teal); border-style: dashed; background: var(--teal-soft); }
@@ -410,7 +412,7 @@
 .chat { display: flex; flex-direction: column; padding: 16px 18px 12px; }
 /* Equal height: neither box is the senior one, and an uneven pair read as a
    mistake next to the video. */
-#chat-problem, #chat-work { min-height: 300px; }
+#chat-problem, #chat-work { min-height: 290px; }
 
 .chat-label {
   flex: 1; display: grid; place-items: center; margin: 0; padding: 6px 0 10px;
