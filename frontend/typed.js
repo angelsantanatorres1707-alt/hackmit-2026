@@ -198,10 +198,19 @@
       var lhs = parseLhs(lhsText);
       var value = parseValue(rhsText);
 
-      if (!lhs || !value) {
+      if (!value) {
         notes.push('Could not read: "' + line + '"');
         order++;
         steps.push(mkStep(order, label, line, lhs, null, false));
+        return;
+      }
+      if (!lhs) {
+        // The VALUE reads; only the left-hand side is a shape this parser does
+        // not classify -- "A(Bv) = ...", "Therefore BAv = ...". Throwing the
+        // value away with it left the backend a blank step, when the backend
+        // reads exactly these forms off raw_text. Send what we have.
+        order++;
+        steps.push(mkStep(order, label, line, null, value, true));
         return;
       }
 
@@ -315,12 +324,17 @@
   var TUPLE_RE = /\(\s*-?\d+(?:\.\d+)?(?:\s*,\s*-?\d+(?:\.\d+)?)+\s*\)/;
   var ASKING_RE = /^\s*(?:how|what|why|when|which|who|where|can|could|would|should|do|does|did|is|are|explain|help|show|tell|walk|give|teach)\b/i;
 
+  var STUCK_RE = /\b(?:i\s+(?:do\s*n[o']?t|don'?t|can'?t|cannot|am\s+not)\b|confus|do\s*n[o']?t\s+(?:get|understand|follow)|makes?\s+no\s+sense|lost|stuck|unclear)/i;
+
   function isQuestion(text) {
     var t = String(text || '').trim();
     if (!t) return true;
     if (/\?\s*$/.test(t)) return true;             // asked outright
-    if (/[=\[\]]/.test(t) || TUPLE_RE.test(t)) return false;   // carries a claim
-    if (ASKING_RE.test(t)) return true;
+    if (ASKING_RE.test(t) || STUCK_RE.test(t)) return true;
+    // Checked AFTER the interrogative tests: "why is Bv = (-1,1) wrong" is a
+    // question that happens to quote an equation, and "i dont get step 3" is a
+    // question that happens to contain a digit.
+    if (/[=\[\]]/.test(t) || TUPLE_RE.test(t)) return false;
     return !/\d/.test(t);                          // no numbers: nothing to check
   }
 

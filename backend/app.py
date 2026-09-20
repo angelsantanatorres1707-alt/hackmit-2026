@@ -490,6 +490,50 @@ def get_job(job_id: str) -> JSONResponse:
     return JSONResponse(_public(job))
 
 
+@app.post("/api/chat/{job_id}")
+async def chat(job_id: str, request: Request) -> JSONResponse:
+    """Talk to the tutor about an analysis it already ran.
+
+    The reply is linted exactly as a hint is -- see backend/chat.py. If the
+    student asks for a different picture and the registry has one that carries
+    this error, it is rendered and the job's video is swapped for it.
+    """
+    job = _JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="no such job")
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    message = str((body or {}).get("message") or "")
+
+    from . import chat as chat_mod
+
+    out = chat_mod.respond(job, message)
+
+    if out.get("want") == "rerender" and out.get("template"):
+        params = dict(job.get("scene_params") or {})
+        try:
+            result = render_mod.render_with_fallback(
+                {"template": out["template"], "params": params})
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "errors": [f"{type(exc).__name__}: {exc}"]}
+        if result.get("ok"):
+            job["video_path"] = result["path"]
+            job["video_id"] = result["video_id"]
+            job["video_status"] = "ready"
+            job["rendered_template"] = result.get("template")
+            out["video_url"] = f"/api/video/{job_id}"
+            out["rendered_template"] = result.get("template")
+        else:
+            # Say so rather than leaving them waiting for a video that is not
+            # coming; the one they already have is still on screen.
+            out["reply"] += (" I could not build that one, so the animation above "
+                             "is still the one to go on.")
+            out["rerender_failed"] = "; ".join(result.get("errors") or [])
+    return JSONResponse(out)
+
+
 @app.get("/api/video/{video_id}")
 def get_video(video_id: str):
     """The mp4. 202 while it is still rendering, so the frontend can just poll."""

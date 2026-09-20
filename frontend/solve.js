@@ -394,6 +394,37 @@
     ol.scrollTop = ol.scrollHeight;
   }
 
+  /* ── talking to the tutor about an analysis it already ran ─────────── */
+
+  function ask(jobId, message) {
+    S.busy = true;
+    syncRun();
+    api('/api/chat/' + encodeURIComponent(jobId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: message }),
+    }).then(function (out) {
+      log('noema', out.reply || 'I do not have anything to add to the hint.');
+      if (out.want === 'upload') {
+        log('noema', 'Drop the page in, or type it one step per line, and I will look.');
+      }
+      if (out.rendered_template && S.job) {
+        // The tutor rebuilt the animation. Swap it under the player without
+        // disturbing anything else on screen.
+        S.job.rendered_template = out.rendered_template;
+        S.job.video_url = out.video_url || S.job.video_url;
+        applyJob(S.job);
+      }
+    }).catch(function (err) {
+      log('noema', 'I could not reach the tutor just now \u2014 ' +
+                   (err && err.message ? err.message : 'no answer') +
+                   '. The hint above still stands.');
+    }).then(function () {
+      S.busy = false;
+      syncRun();
+    });
+  }
+
   /* ── running an analysis ───────────────────────────────────────────── */
 
   function run() {
@@ -413,6 +444,12 @@
       if (T.isQuestion(note)) {
         log('you', note, true);
         workBox.clear();
+
+        // Once there IS an analysis, a question is a question about it, and
+        // the tutor can answer. Before that there is nothing to talk about,
+        // so fall through to working out which upload would answer them.
+        if (S.job && S.job.job_id) { ask(S.job.job_id, note); return; }
+
         var want = T.whatToAsk(note, S.problem && S.problem.text);
         if (want.outOfScope) {
           log('noema', 'I cannot help with ' + want.outOfScope + ' \u2014 there is no ' +
