@@ -295,3 +295,46 @@
   background: rgba(220, 68, 68, 0.09);
   border: 2px solid rgba(200, 50, 50, 0.55); color: #98222C;
 }
+
+/* ── zones: the problem on top, the work under it ────────────────────── */
+.zone { display: flex; flex-direction: column; }
+.zone + .zone { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
+.zone-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.zone-title { font-size: 1.14rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+.zone-change {
+  border: none; background: none; cursor: pointer; padding: 4px 2px;
+  color: var(--teal-ink); font-family: var(--font-body); font-size: 0.94rem; font-weight: 500;
+}
+.zone-change:hover { text-decoration: underline; }
+
+.prob-input { display: flex; flex-direction: column; gap: 12px; }
+.prob-actions { display: flex; gap: 10px; }
+.prob-actions .ws-btn { display: inline-flex; align-items: center; gap: 9px; }
+.prob-actions .ws-btn svg {
+  width: 15px; height: 15px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+#prob-text {
+  width: 100%; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-2); padding: 13px 15px; resize: vertical; display: block;
+  font-family: var(--font-mono); font-size: 0.98rem; line-height: 1.55; color: var(--text);
+}
+#prob-text:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
+#prob-text::placeholder { color: var(--dim); }
+.prob-save { align-self: flex-start; }
+.prob-save:disabled { opacity: 0.45; cursor: not-allowed; }
+.prob-save:not(:disabled) { border-color: var(--teal); background: var(--teal-soft); color: var(--teal-ink); }
+
+/* Kept on screen so it can be referred back to while working. */
+.prob-shown {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-2); padding: 14px 16px;
+}
+.prob-shown[hidden] { display: none; }
+.prob-shown img { display: block; width: 100%; max-height: 260px; object-fit: contain; border-radius: 9px; }
+.prob-shown img[hidden] { display: none; }
+.prob-statement {
+  margin: 0; font-family: var(--font-mono); font-size: 1rem; line-height: 1.6;
+  color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.prob-shown img:not([hidden]) + .prob-statement:not([hidden]) { margin-top: 12px; }

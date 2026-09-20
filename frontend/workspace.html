@@ -26,6 +26,40 @@
 
   <!-- ─────────────────────────── WORKSPACE ─────────────────────────── -->
   <section class="pane">
+
+    <!-- ── 1. the problem, which stays on screen to refer back to ── -->
+    <div class="zone" id="problem-zone">
+      <div class="zone-head">
+        <h2 class="zone-title">The problem</h2>
+        <button class="zone-change" type="button" id="prob-change" hidden>Change</button>
+      </div>
+
+      <div class="prob-input" id="prob-input">
+        <div class="prob-actions">
+          <input type="file" id="prob-file" accept="image/*,.heic,.heif,application/pdf,.pdf" hidden>
+          <button class="ws-btn" type="button" id="prob-browse">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V6M6 12l6-6 6 6"/></svg>Upload
+          </button>
+          <button class="ws-btn" type="button" id="prob-camera">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="4"/></svg>Camera
+          </button>
+        </div>
+        <textarea id="prob-text" rows="2"
+          placeholder="…or type the problem, e.g. Compute AB, where A = [0 -1; 1 0] and B = [3 0; 0 1]."></textarea>
+        <button class="ws-btn prob-save" type="button" id="prob-save" disabled>Keep this problem</button>
+      </div>
+
+      <div class="prob-shown" id="prob-shown" hidden>
+        <img id="prob-img" alt="The problem you uploaded" hidden>
+        <p class="prob-statement" id="prob-statement" hidden></p>
+      </div>
+    </div>
+
+    <!-- ── 2. your work ── -->
+    <div class="zone">
+      <div class="zone-head">
+        <h2 class="zone-title">Your work</h2>
+      </div>
     <div class="pane-body">
       <div class="ws-drop" id="ws-drop" tabindex="0" role="button"
            aria-label="Upload your work">
@@ -73,7 +107,7 @@
 
       <div class="composer-field">
         <textarea id="ws-prompt" rows="3"
-          placeholder="Type your working, one step per line &#10;   A = [0 -1; 1 0]&#10;   B = [3 0; 0 1]&#10;   AB = [0 -3; 1 0]&#10;&#10;…or upload a photo above. Ask for clarification here too."></textarea>
+          placeholder="Type your working, one step per line &#10;   A = [0 -1; 1 0]&#10;   AB = [0 -3; 1 0]&#10;&#10;…or upload a photo above. Say what you&#39;re confused about here too."></textarea>
       </div>
 
       <div class="composer-foot">
@@ -82,6 +116,7 @@
           Run analysis <kbd>&#8984;</kbd><kbd>&#9166;</kbd>
         </button>
       </div>
+    </div>
     </div>
 
   </section>

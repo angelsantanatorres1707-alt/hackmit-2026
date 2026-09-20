@@ -95,6 +95,85 @@
   // -- /api/fixtures still serves them, so a sample can be triggered from the
   // console or wired to a single unlabelled button if one is wanted back.
 
+
+  /* ── the problem ───────────────────────────────────────────────────────
+   *
+   * Kept on screen once set, so it can be referred back to while working.
+   * Where it actually reaches the analysis:
+   *   typed work  -> the statement rides along in problem.statement, which
+   *                  verify.py reads.
+   *   photo work  -> a problem IMAGE is sent alongside the work image and
+   *                  extract.py reads the problem off the page. A problem
+   *                  TYPED here has nowhere to go on that path: the multipart
+   *                  route has no field for it. Said out loud rather than
+   *                  quietly dropped.
+   */
+
+  function setProblem(next) {
+    if (S.problem && S.problem.url) URL.revokeObjectURL(S.problem.url);
+    S.problem = next;
+    renderProblem();
+    syncRun();
+  }
+
+  function renderProblem() {
+    var input = $('#prob-input');
+    var shown = $('#prob-shown');
+    var img = $('#prob-img');
+    var stmt = $('#prob-statement');
+
+    if (!S.problem) {
+      input.hidden = false;
+      shown.hidden = true;
+      $('#prob-change').hidden = true;
+      return;
+    }
+
+    input.hidden = true;
+    shown.hidden = false;
+    $('#prob-change').hidden = false;
+
+    if (S.problem.url) { img.src = S.problem.url; img.hidden = false; }
+    else { img.removeAttribute('src'); img.hidden = true; }
+
+    if (S.problem.text) { stmt.textContent = S.problem.text; stmt.hidden = false; }
+    else { stmt.textContent = ''; stmt.hidden = true; }
+  }
+
+  function wireProblem() {
+    var file = $('#prob-file');
+    var text = $('#prob-text');
+    var save = $('#prob-save');
+
+    function canSave() { save.disabled = !text.value.trim(); }
+    text.addEventListener('input', canSave);
+
+    $('#prob-browse').addEventListener('click', function () { file.click(); });
+    file.addEventListener('change', function () {
+      var f = file.files && file.files[0];
+      file.value = '';
+      if (!f) return;
+      if (isPdf(f)) { toast('PDFs are not readable yet \u2014 upload a PNG or JPEG of the problem.'); return; }
+      setProblem({ file: f, url: URL.createObjectURL(f), text: text.value.trim() || null });
+    });
+
+    save.addEventListener('click', function () {
+      var v = text.value.trim();
+      if (v) setProblem({ text: v });
+    });
+
+    $('#prob-camera').addEventListener('click', function () { openCamera('problem'); });
+
+    $('#prob-change').addEventListener('click', function () {
+      var keep = (S.problem && S.problem.text) || '';
+      setProblem(null);
+      text.value = keep;
+      canSave();
+    });
+
+    renderProblem();
+  }
+
   /* ── files ─────────────────────────────────────────────────────────── */
 
   function addFiles(list) {
@@ -172,7 +251,9 @@
 
     var note = $('#composer-note');
     if (!hasFiles && !hasText) {
-      note.textContent = 'Drop a photo above, or type your working one step per line.';
+      note.textContent = S.problem
+        ? 'Problem saved. Now add your work \u2014 a photo, or typed one step per line.'
+        : 'Drop a photo above, or type your working one step per line.';
       note.classList.remove('is-warn');
     } else {
       note.textContent = NOTE_DEFAULT;
@@ -204,6 +285,9 @@
     if (!S.files.length) {
       if (!note) return;
       var parsed = global.NoemaTyped.parse(note);
+      if (parsed.ok && !parsed.problem && S.problem && S.problem.text) {
+        parsed.problem = S.problem.text;      // the one kept above, not re-typed
+      }
       if (!parsed.ok) {
         log('you', note, true);
         log('noema', parsed.error);
@@ -227,8 +311,17 @@
     }
 
     var fd = new FormData();
+    if (S.problem && S.problem.file) {
+      // The problem page goes first: extract.py reads the problem off the page.
+      fd.append('images', S.problem.file, S.problem.file.name || 'problem.jpg');
+    }
     S.files.forEach(function (f) { fd.append('images', f, f.name || 'page.jpg'); });
     if (note) fd.append('problem_note', note);
+    if (S.problem && S.problem.text && !S.problem.file) {
+      log('noema', 'Noting your typed problem for reference. It cannot be sent with a ' +
+                   'photo \u2014 the upload route has no field for it \u2014 so the check ' +
+                   'runs against what is on the page.');
+    }
 
     if (note) {
       log('you', note, true);
@@ -539,6 +632,8 @@
 
   /* ── camera: getUserMedia -> canvas -> a File in the same queue ───────── */
 
+  var camDest = 'work';
+
   function wireCamera() {
     var btn = $('#mode-camera');
     var panel = $('#cam');
@@ -559,6 +654,8 @@
       setMode('text');
     }
 
+    global.__noemaOpenCamera = function (dest) { camDest = dest || 'work'; if (!stream) open(); };
+
     function open() {
       navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
         .then(function (st) {
@@ -577,7 +674,7 @@
         });
     }
 
-    btn.addEventListener('click', function () { if (stream) close(); else open(); });
+    btn.addEventListener('click', function () { camDest = 'work'; if (stream) close(); else open(); });
     $('#cam-stop').addEventListener('click', close);
     $('#cam-shot').addEventListener('click', function () {
       if (!stream || !video.videoWidth) return;
@@ -588,7 +685,13 @@
       c.toBlob(function (blob) {
         if (!blob) return;
         var name = 'camera-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.jpg';
-        addFiles([new File([blob], name, { type: 'image/jpeg' })]);
+        var shot = new File([blob], name, { type: 'image/jpeg' });
+        if (camDest === 'problem') {
+          setProblem({ file: shot, url: URL.createObjectURL(shot), text: $('#prob-text').value.trim() || null });
+        } else {
+          addFiles([shot]);
+        }
+        camDest = 'work';
         close();
       }, 'image/jpeg', 0.92);
     });
@@ -602,12 +705,18 @@
     });
   }
 
+  function openCamera(dest) {
+    if (global.__noemaOpenCamera) global.__noemaOpenCamera(dest);
+    else toast('The camera is not available in this browser.');
+  }
+
   /* ── go ────────────────────────────────────────────────────────────── */
 
   wireInput();
   wireTransport();
   wireVoice();
   wireCamera();
+  wireProblem();
   renderFiles();
   loadHealth();
 })(window);
