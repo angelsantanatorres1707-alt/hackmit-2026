@@ -53,11 +53,12 @@
 
   <ol class="steps-list">
     <li>
-      <b>Extract.</b> A vision model transcribes the page as a
+      <b>Read.</b> A vision model transcribes the page as a
       <em>transcriber, not a solver</em>. It returns typed steps &mdash; raw text, parsed
       value, confidence, ambiguities, crossed-out flags &mdash; and is forbidden to fix
-      anything it sees. You get a read-back screen to correct anything the camera
-      misread.
+      anything it sees. You can correct anything the camera misread. If you would rather
+      type than photograph, write one step per line
+      (<code>AB = [0 -3; 1 0]</code>) and the same checks run on that instead.
     </li>
     <li>
       <b>Verify.</b> Each step is checked with <code>sympy</code>, not a language model.

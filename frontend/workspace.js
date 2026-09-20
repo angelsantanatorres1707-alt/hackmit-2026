@@ -14,7 +14,7 @@
  *     backend/extract.py opens every upload with PIL and has no PDF path, so
  *     we say so up front instead of letting it 502 at the worst moment.
  */
-(function () {
+(function (global) {
   'use strict';
 
   var $ = function (sel) { return document.querySelector(sel); };
@@ -168,14 +168,11 @@
   function syncRun() {
     var hasFiles = S.files.length > 0;
     var hasText = $('#ws-prompt').value.trim().length > 0;
-    $('#ws-run').disabled = S.busy || !hasFiles;
+    $('#ws-run').disabled = S.busy || (!hasFiles && !hasText);
 
     var note = $('#composer-note');
-    if (!hasFiles && hasText) {
-      note.textContent = 'Add a photo or scan of your work \u2014 Noema reads handwriting, and cannot analyse typed text yet.';
-      note.classList.add('is-warn');
-    } else if (!hasFiles) {
-      note.textContent = 'Drop a photo of your work above to run an analysis.';
+    if (!hasFiles && !hasText) {
+      note.textContent = 'Drop a photo above, or type your working one step per line.';
       note.classList.remove('is-warn');
     } else {
       note.textContent = NOTE_DEFAULT;
@@ -199,8 +196,35 @@
   /* ── running an analysis ───────────────────────────────────────────── */
 
   function run() {
-    if (S.busy || !S.files.length) return;
+    if (S.busy) return;
     var note = $('#ws-prompt').value.trim();
+
+    // No photo, but something typed: parse it into the extraction schema and
+    // use the API's no-vision path. Nothing is sent until it parses.
+    if (!S.files.length) {
+      if (!note) return;
+      var parsed = global.NoemaTyped.parse(note);
+      if (!parsed.ok) {
+        log('you', note, true);
+        log('noema', parsed.error);
+        $('#ws-prompt').value = '';
+        syncRun();
+        toast(parsed.error);
+        return;
+      }
+      log('you', note, true);
+      parsed.notes.forEach(function (n) { log('noema', n); });
+      log('noema', 'Read ' + parsed.steps.length + ' step' +
+                   (parsed.steps.length > 1 ? 's' : '') + ' from what you typed. Checking them\u2026');
+      $('#ws-prompt').value = '';
+      syncRun();
+      start(api('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(global.NoemaTyped.toPayload(parsed)),
+      }));
+      return;
+    }
 
     var fd = new FormData();
     S.files.forEach(function (f) { fd.append('images', f, f.name || 'page.jpg'); });
@@ -426,7 +450,6 @@
     $('#ws-prompt').addEventListener('keydown', function (e) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
-        if ($('#ws-run').disabled) { toast('Add a photo of your work first \u2014 typed text alone cannot be analysed yet.'); return; }
         run();
       }
     });
@@ -560,4 +583,4 @@
   wireCamera();
   renderFiles();
   loadHealth();
-})();
+})(window);
