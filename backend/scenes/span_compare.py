@@ -242,8 +242,8 @@ class SpanCompare(ParamScene):
         if probe is not None:
             p_dot = Dot(P.pt(probe), radius=0.11, color=PROBE)
             p_dot.set_z_index(Z_FLASH)
-            p_lab = label_text("can you reach this?", font_size=18, color=PROBE,
-                               max_width=3.0)
+            p_lab = label_text("can you reach this?", font_size=22, color=PROBE,
+                               max_width=3.8)
             p_lab.next_to(p_dot, np.array([-1.0, 0.0, 0.0]), buff=0.16)
             p_lab.set_z_index(Z_CHROME)
             d = V[0] / float(np.linalg.norm(V[0]))

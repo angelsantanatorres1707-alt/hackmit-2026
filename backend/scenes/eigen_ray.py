@@ -174,7 +174,7 @@ class EigenRayTest(ParamScene):
             ghost_arrow.set_z_index(1)
             ghost_tag = side_label("your length",
                                    L.pt(0.62 * p["lambda_claimed"] * v_t),
-                                   v_t, color=GHOST, font_size=18, side=+1)
+                                   v_t, color=GHOST, font_size=22, side=+1)
         else:
             ghost_tag = None
 

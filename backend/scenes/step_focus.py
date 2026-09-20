@@ -220,6 +220,10 @@ class StaticStepHighlight(ParamScene):
 
         stack = VGroup(*rendered)
         stack.arrange(np.array([0.0, -1.0, 0.0]), buff=0.58)
+        # A two- or three-line step left most of the frame empty. Grow a
+        # short stack into the space instead of leaving it at reading size.
+        if 0.1 < stack.height < 4.0:
+            stack.scale(min(4.0 / stack.height, 12.6 / max(stack.width, 0.1)))
         if stack.height > 4.6:
             stack.scale(4.6 / stack.height)
         if stack.width > 12.6:

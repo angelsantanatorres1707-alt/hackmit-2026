@@ -209,7 +209,7 @@ class DeterminantAreaCompare(ParamScene):
         j_hat = VecArrow(P, [0, 1], J_HAT)
 
         readout = live_text(lambda: f"{signed_area(sq, P.unit):.2f}",
-                            at=live_anchor, font_size=34, color=CORRECT,
+                            at=live_anchor, font_size=38, color=CORRECT,
                             aligned_edge=np.array([-1.0, 0.0, 0.0])) \
             if reveal else None
 
@@ -233,7 +233,7 @@ class DeterminantAreaCompare(ParamScene):
         # -- 5.9 / 0.6  lock the readout --------------------------------
         if reveal:
             final = signed_area(sq, P.unit)
-            locked = T(f"{final:.2f}", font_size=34, color=CORRECT)
+            locked = T(f"{final:.2f}", font_size=38, color=CORRECT)
             locked.move_to(live_anchor, aligned_edge=np.array([-1.0, 0.0, 0.0]))
             locked.set_z_index(Z_CHROME)
             self.remove(readout)
@@ -246,7 +246,7 @@ class DeterminantAreaCompare(ParamScene):
             flash = [Flash(sq.get_center_of_mass(), color=CORRECT,
                            line_length=0.16, flash_radius=0.55)]
         if flips:
-            turned = label_text("the sheet turned over", font_size=20,
+            turned = label_text("the sheet turned over", font_size=23,
                                 color=PROBE, max_width=4.6)
             # Hung off the board, not a fixed y: the board's own height
             # moves with the font scale, and a fixed y lands this caption on
@@ -271,7 +271,7 @@ class DeterminantAreaCompare(ParamScene):
                                   P.pt([cx + frac, cy + 1]), P.pt([cx, cy + 1]),
                                   stroke_width=2, color=GHOST))
             tiles.set_z_index(Z_OVERLAY - 3)
-            cap = label_text("your answer means this much area", font_size=20,
+            cap = label_text("your answer means this much area", font_size=23,
                              color=GHOST, max_width=4.6)
             cap.move_to(np.array([BOARD_X, -2.1, 0.0])).set_z_index(Z_CHROME)
             self.play(Create(tiles), FadeIn(cap), run_time=1.7)
@@ -340,7 +340,7 @@ class DeterminantAreaCompare(ParamScene):
 
         body = always_redraw(solid)
         readout = live_text(lambda: f"{abs(np.linalg.det(M_t())):.2f}",
-                            at=live_anchor, font_size=34, color=CORRECT,
+                            at=live_anchor, font_size=38, color=CORRECT,
                             aligned_edge=np.array([-1.0, 0.0, 0.0])) \
             if reveal else None
 
@@ -363,7 +363,7 @@ class DeterminantAreaCompare(ParamScene):
 
         if reveal:
             final = float(np.linalg.det(M))
-            locked = T(f"{abs(final):.2f}", font_size=34, color=CORRECT)
+            locked = T(f"{abs(final):.2f}", font_size=38, color=CORRECT)
             locked.move_to(live_anchor, aligned_edge=np.array([-1.0, 0.0, 0.0]))
             locked.set_z_index(Z_CHROME)
             self.remove(readout)
@@ -376,7 +376,7 @@ class DeterminantAreaCompare(ParamScene):
 
         cap = label_text(
             f"your answer asks for {fmt_num(abs(claimed))} times this volume",
-            font_size=20, color=GHOST, max_width=4.8)
+            font_size=23, color=GHOST, max_width=5.4)
         cap.move_to(np.array([BOARD_X, -2.1, 0.0])).set_z_index(Z_FLASH)
         self.play(FadeIn(cap), run_time=1.4)
         self.play(Write(lay.hint), run_time=1.2)

@@ -868,7 +868,7 @@ def two_panel_layout(scene: Scene, *, title: str, student_label: str,
         # Same row as the per-panel matrices when there are none to clash
         # with, so it clears the heading row above it.
         center_mat.move_to(np.array([
-            0.0, MAT_Y + (0.42 if (student_rows or correct_rows) else 0.0), 0.0]))
+            0.0, MAT_Y + (0.42 if (student_rows or correct_rows) else 0.12), 0.0]))
     if student_rows is not None:
         l_mat = TextMatrix(student_rows, color=STUDENT, font_size=FS_MAT)
         l_mat.move_to(np.array([-dx, MAT_Y, 0.0]))
@@ -1082,7 +1082,7 @@ def foot_on_line(origin: np.ndarray, direction, point: np.ndarray) -> np.ndarray
 
 
 def residual(p: np.ndarray, q: np.ndarray, *, label: str | None = None,
-             color: str = PROBE, font_size: int = 19,
+             color: str = PROBE, font_size: int = 22,
              away_from: np.ndarray | None = None, side: int | None = None,
              label_buff: float = 0.46) -> VGroup:
     """Dashed gap between two points, plus an optional label beside it.
@@ -1120,7 +1120,7 @@ def residual(p: np.ndarray, q: np.ndarray, *, label: str | None = None,
 
 
 def side_label(text: str, anchor: np.ndarray, direction, *, color: str = GHOST,
-               font_size: int = 18, buff: float = 0.34, side: int = 1) -> Text:
+               font_size: int = 22, buff: float = 0.34, side: int = 1) -> Text:
     """A small caption placed clear of a line/arrow, perpendicular to it."""
     d = np.asarray(direction, dtype=float).flatten()
     d = np.array([d[0], d[1], 0.0])

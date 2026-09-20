@@ -214,8 +214,8 @@ class VectorOpCompare(ParamScene):
             circ = Circle(radius=P.unit, color=GHOST, stroke_width=3)
             circ.move_to(P.origin)
             circ.set_z_index(Z_OVERLAY - 3)
-            cap = label_text("length 1 lives here", font_size=19, color=GHOST,
-                             max_width=3.4)
+            cap = label_text("length 1 lives here", font_size=22, color=GHOST,
+                             max_width=4.0)
             # below the circle: the direction ray and its label own the
             # upper half in most cases
             cap.move_to(P.origin + np.array([0.0, -(P.unit + 0.42), 0.0]))
@@ -331,7 +331,7 @@ class VectorOpCompare(ParamScene):
         sheet.set_fill(GHOST, opacity=0.25)
         sheet.set_z_index(Z_OVERLAY - 3)
         cap = label_text("every arrow in here is a combination of u and v",
-                         font_size=17, color=GHOST, max_width=4.8)
+                         font_size=21, color=GHOST, max_width=5.6)
         cap.move_to(P.center + np.array([0.0, -PLANE_BOX / 2 + 0.34, 0.0]))
         cap.set_z_index(Z_CHROME)
         self.play(FadeIn(sheet), FadeIn(cap), run_time=1.2)

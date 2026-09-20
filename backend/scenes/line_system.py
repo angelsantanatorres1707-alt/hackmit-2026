@@ -334,7 +334,7 @@ class LineSystemCompare(ParamScene):
         foot = hinge + t * np.array([a, b])
         gap = residual(L.pt(hinge), L.pt(foot), color=PROBE,
                        label="off the crossing", away_from=L.center,
-                       font_size=17, label_buff=0.2)
+                       font_size=21, label_buff=0.24)
         marks = [FadeIn(gap),
                  Flash(R.pt(hinge), color=CORRECT, line_length=0.18,
                        flash_radius=0.5)]
@@ -344,8 +344,8 @@ class LineSystemCompare(ParamScene):
                        np.array(e2) / np.linalg.norm(e2[:2]), atol=1e-6) or \
            np.allclose(np.array(c_line) / np.linalg.norm(c_line[:2]),
                        -np.array(e2) / np.linalg.norm(e2[:2]), atol=1e-6):
-            tag = label_text("unchanged", font_size=20, color=CORRECT,
-                             max_width=2.4)
+            tag = label_text("unchanged", font_size=24, color=CORRECT,
+                             max_width=3.0)
             tag.move_to(R.center + np.array([0.0, -PLANE_BOX / 2 + 0.3, 0.0]))
             tag.set_z_index(Z_CHROME)
             marks.append(FadeIn(tag))
