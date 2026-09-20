@@ -565,6 +565,30 @@ the page was certified correct while a later, arithmetically perfect line took t
 - **Hint:** "Coordinates in a basis are the amounts of each basis vector you need to
   rebuild the vector — not the vector's own entries."
 
+### LA31 — the perpendicular part returned instead of the shadow
+**Topic:** projection · **Visual:** strong
+
+"Find the projection of v onto the x-axis" names its target subspace in WORDS. The
+extractor has no vector to record for it, so `topic_target()` built nothing, the final
+step went `UNCHECKED`, and a wrong answer came back as "nothing in this work disagrees".
+`named_axis()` turns the wording into the basis vector it always was and hands it to the
+existing projection machinery under the reserved given `axis`; nothing about projections
+is special-cased and no answer is hardcoded.
+
+The misconception itself: v splits into a part lying ALONG the axis and a part standing
+away from it at a right angle. Both are honest pieces of v and they sum to v, which is
+exactly why students hand back the wrong one.
+
+- **Student writes:** `v = (3,2)`, `proj(v) = (0,2)`
+- **Check:** the claim equals `v - proj`, the residual, rather than `proj`
+- **Scene:** `VectorOpCompare` (`op="projection"`) — v, the axis, the dashed
+  perpendicular, the shadow along the axis, and the student's arrow standing straight up
+- **Hint:** "A shadow lies ALONG the thing it falls on. What you kept is the part that
+  stands away from it at a right angle."
+- **Deliberately literal:** one axis, named outright. Two axes in one sentence, a
+  non-axis subspace ("the line y = 2x"), or a task that is not a projection ("reflect v
+  across the x-axis") all leave the machinery switched off rather than guessing.
+
 ---
 
 ### LA19 — projection with the wrong denominator

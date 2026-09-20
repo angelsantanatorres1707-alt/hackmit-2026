@@ -1105,6 +1105,18 @@ def topic_target(topic: str, env: dict[str, Val]) -> tuple[Optional[Val], str]:
             if tgt is not None and len(basis) >= 2:
                 return (wrap(_project_onto_span(tgt, basis)),
                         "the projection onto span{" + ", ".join(names) + "}")
+        axis = env.get(AXIS_SYMBOL)
+        if axis is not None:
+            subject = None
+            for name, val in env.items():
+                if name == AXIS_SYMBOL or val is None or not val.is_matrix:
+                    continue
+                if min(val.obj.shape) == 1 and max(val.obj.shape) == axis.obj.rows:
+                    subject = _col(val.obj)
+                    break
+            if subject is not None:
+                return (wrap(_project_onto_span(subject, [_col(axis.obj)])),
+                        "the projection onto that axis")
         if topic == "projection" and "u" in env and "v" in env:
             return wrap(_project(env["u"].obj, env["v"].obj)), "the projection of u onto v"
         if topic == "norm" and "v" in env:
@@ -1349,6 +1361,21 @@ def match_signature(S: Val, env: dict[str, Val], expected: Optional[Val], step: 
     # perpendicular. Nothing per-step catches that, so it is caught here, by
     # the property that defines an orthogonal projection -- b minus the
     # projection must be perpendicular to the whole subspace.
+    # LA31: they returned the part of v that is PERPENDICULAR to the target --
+    # the dropped vertical -- instead of the shadow lying along it. Both are
+    # honest pieces of v and the pair sums to v, which is exactly why the swap
+    # is so easy to make and so worth naming.
+    if S.is_matrix and expected is not None and expected.is_matrix:
+        _sub = _projection_subject(env)
+        if _sub is not None:
+            try:
+                _sv, _ev = _col(s), _col(expected.obj)
+                if _sv.shape == _sub.shape == _ev.shape and not same(_sv, _ev):
+                    if same(_sv, _sub - _ev):
+                        checks.append(("LA31", lambda: True))
+            except Exception:  # noqa: BLE001
+                pass
+
     if S.is_matrix and _is_projection_claim(topic, step, env):
         _tgt, _basis, _names = _projection_setup(env)
         if _tgt is not None and len(_basis) >= 2:
@@ -1407,6 +1434,22 @@ def match_signature(S: Val, env: dict[str, Val], expected: Optional[Val], step: 
 
 
 _SWAP = re.compile(r"(swap|interchang|<->|<=>|R1\s*<|R2\s*<|↔)", re.I)
+
+
+def _projection_subject(env: dict[str, Val]):
+    """The vector being projected, when an axis names the target subspace."""
+    axis = env.get(AXIS_SYMBOL)
+    if axis is None or not axis.is_matrix:
+        return None
+    for name, val in env.items():
+        if name == AXIS_SYMBOL or val is None or not val.is_matrix:
+            continue
+        try:
+            if min(val.obj.shape) == 1 and max(val.obj.shape) == axis.obj.rows:
+                return _col(val.obj)
+        except Exception:  # noqa: BLE001
+            continue
+    return None
 
 
 def _swap_evidence(step: Step) -> bool:
@@ -1505,6 +1548,53 @@ class Verdict:
         }
 
 
+# A coordinate axis is a subspace with a name instead of a symbol. "project v
+# onto the x-axis" gives the extractor nothing vector-valued to record, so the
+# target subspace vanished before the verifier ever saw it and a wrong answer
+# came back as "nothing in this work disagrees". Naming it is all that was
+# missing; the projection machinery underneath is unchanged.
+AXIS_SYMBOL = "axis"
+
+_AXIS_WORDS = (
+    (re.compile(r"\b(?:the\s+)?x[\s-]*axis\b|\bhorizontal\s+axis\b", re.I), 0),
+    (re.compile(r"\b(?:the\s+)?y[\s-]*axis\b|\bvertical\s+axis\b", re.I), 1),
+    (re.compile(r"\b(?:the\s+)?z[\s-]*axis\b", re.I), 2),
+)
+_PROJECTION_WORD = re.compile(r"\bproject\w*\b|\bcomponent\s+(?:of|along)\b"
+                              r"|\bshadow\b", re.I)
+
+
+def named_axis(text: str, dim: int) -> Optional["sp.Matrix"]:
+    """-> the axis this wording names, as a basis vector of R^dim, or None.
+
+    Deliberately literal: one axis, named outright. Anything vaguer is left
+    alone rather than guessed at.
+    """
+    if not text or dim not in (2, 3):
+        return None
+    hits = [i for rx, i in _AXIS_WORDS if rx.search(text)]
+    if len(hits) != 1 or hits[0] >= dim:
+        return None
+    return sp.Matrix([1 if k == hits[0] else 0 for k in range(dim)])
+
+
+def _axis_from_problem(ext: Extraction, env: dict[str, Val]) -> Optional["sp.Matrix"]:
+    text = " ".join(filter(None, [getattr(ext.problem, "asks_for", "") or "",
+                                  getattr(ext.problem, "statement", "") or ""]))
+    if not _PROJECTION_WORD.search(text):
+        return None
+    dims = set()
+    for val in env.values():
+        try:
+            if val is not None and val.is_matrix and min(val.obj.shape) == 1:
+                dims.add(max(val.obj.shape))
+        except Exception:  # noqa: BLE001
+            continue
+    if len(dims) != 1:
+        return None
+    return named_axis(text, dims.pop())
+
+
 def _given_envs(ext: Extraction, cap: int = 4) -> list[dict[str, Val]]:
     """Primary reading of the givens first, then one-at-a-time alternate readings
     (§4.7 charity applied to the givens, where a misread poisons every check)."""
@@ -1513,6 +1603,9 @@ def _given_envs(ext: Extraction, cap: int = 4) -> list[dict[str, Val]]:
         v = to_sympy(g.object)
         if v is not None:
             base[g.symbol] = v
+    axis = _axis_from_problem(ext, base)
+    if axis is not None and AXIS_SYMBOL not in base:
+        base[AXIS_SYMBOL] = Val("vector", axis, "column")
     envs = [base]
     for g in ext.problem.givens:
         for alt in g.alternates[:1]:

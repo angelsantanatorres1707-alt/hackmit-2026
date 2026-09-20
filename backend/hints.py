@@ -240,6 +240,10 @@ HINTS: dict[str, tuple[str, str]] = {
              "the reachable set is only as big as the columns are different from each "
              "other. Watch how much of the plane stays dark, and where b sits, in "
              "{step}.", "watch how much stays dark, and where b sits"),
+    "LA31": ("A shadow lies ALONG the thing it falls on. What you kept is the part "
+             "that stands away from it at a right angle -- the piece left over, not "
+             "the shadow. Watch which of the two you drew in {step}.",
+             "watch which piece lies along the axis"),
     "LA28": ("A vector can sit on an eigen-line and still belong to a different "
              "stretch. Watch how far along its own line {step} sends it, against how "
              "far the eigenvalue you paired it with would.",
@@ -518,7 +522,7 @@ def plan(verdict: Verdict, ext: Extraction) -> Plan:
         "LA04": _determinant, "LA05": _determinant, "LA06": _determinant,
         "LA09": _eigen_vector, "LA10": _eigen_value,
         "LA11": _vector_op, "LA17": _vector_op, "LA19": _vector_op,
-        "LA20": _vector_op, "LA21": _vector_op,
+        "LA20": _vector_op, "LA21": _vector_op, "LA31": _vector_op,
         "LA22": _angle_property, "LA23": _angle_property,
         "LA24": _grid_order,
         "LA28": _eigen_vector,
@@ -895,9 +899,19 @@ def _real_eigenvector(M: sp.Matrix) -> Optional[list[float]]:
 def _vector_op(verdict, ext, env, S, C):
     eid = verdict.error_id
     op = {"LA11": "normalize", "LA17": "cross", "LA19": "projection",
-          "LA20": "projection", "LA21": "projection"}.get(eid or "", "generic")
-    u = _flat(env.get("u")) or _flat(env.get("v"))
-    v = _flat(env.get("v")) or _flat(env.get("u"))
+          "LA20": "projection", "LA21": "projection",
+          "LA31": "projection"}.get(eid or "", "generic")
+    axis = _flat(env.get("axis"))
+    if axis:
+        # A named coordinate axis is the thing being projected ONTO; the one
+        # other vector in scope is what is being projected.
+        u = next((_flat(env[k]) for k in env
+                  if k != "axis" and _flat(env.get(k))
+                  and len(_flat(env[k])) == len(axis)), None)
+        v = axis
+    else:
+        u = _flat(env.get("u")) or _flat(env.get("v"))
+        v = _flat(env.get("v")) or _flat(env.get("u"))
     w_claimed, w_correct = _flat(S), _flat(C)
     if not (u and v and w_claimed and w_correct):
         raise SceneUnavailable("missing one of the vectors this comparison needs")
@@ -926,7 +940,7 @@ def _vector_op(verdict, ext, env, S, C):
     return "VectorOpCompare", {
         "op": op, "u": u, "v": v,
         "w_claimed": w_claimed, "w_correct": w_correct,
-        "labels": {"u": "u", "v": "v"},
+        "labels": {"u": "v", "v": "the axis"} if axis else {"u": "u", "v": "v"},
         "readouts": readouts,
         "ambient": dim,
         "student_label": "YOUR ANSWER", "correct_label": "THE PROPERTY IT MUST HAVE",
