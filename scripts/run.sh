@@ -52,11 +52,18 @@ for arg in "$@"; do
 done
 
 if [ "$MODE" = "live" ]; then
-  [ -n "${ANTHROPIC_API_KEY:-}" ] \
-    || { echo "ERROR: --live needs ANTHROPIC_API_KEY set." >&2
-         echo "  export ANTHROPIC_API_KEY=sk-ant-..." >&2
-         echo "Or drop --live to run on the bundled samples instead." >&2
-         exit 1; }
+  # Any supported provider will do here. The backend decides which one is
+  # actually used (it is pinned in vision_providers.py) and says precisely
+  # what is wrong if the pinned provider's key is the one missing -- this
+  # gate only needs to know that SOME key exists. It used to demand
+  # ANTHROPIC_API_KEY, which refused to start for an OpenAI key even though
+  # setkey.sh offers OpenAI first.
+  if [ -z "${OPENAI_API_KEY:-}${ANTHROPIC_API_KEY:-}${GEMINI_API_KEY:-}${OPENROUTER_API_KEY:-}" ]; then
+    echo "ERROR: --live needs a vision API key." >&2
+    echo "  Set one with:  bash scripts/setkey.sh" >&2
+    echo "Or drop --live to run on the bundled samples instead." >&2
+    exit 1
+  fi
   export USE_FIXTURE=0
   echo "==> LIVE mode: uploaded photos go to the vision model."
 else
