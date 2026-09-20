@@ -1006,12 +1006,15 @@ def _static(verdict, ext, env, S, C):
     else:
         focus["chars"] = [0, min(len(lines[focus_line].get("text", "") or "x"), 40)]
 
-    annotation = _annotation(verdict, S, C)
+    failing = next((st for st in steps if st.id == verdict.step_id), None)
+    operands = list(getattr(getattr(failing, "op_args", None), "source_symbols", None) or [])
+    pairing = _pairing(verdict, env, S, C, operands)
+    annotation = _annotation(verdict, S, C, pairing)
     params: dict[str, Any] = {
         "lines": lines[:6],
         "focus": focus,
         "annotation": annotation,
-        "pairing": _pairing(verdict, env, S, C),
+        "pairing": pairing,
         "student_label": "WHAT YOU WROTE",
         "correct_label": "WHAT TO LOOK AT",
     }
@@ -1029,32 +1032,90 @@ def _first_differing_cell(S: Optional[Val], C: Optional[Val]) -> Optional[list[i
     return None
 
 
-def _annotation(verdict: Verdict, S: Optional[Val], C: Optional[Val]) -> str:
+def _annotation(verdict: Verdict, S: Optional[Val], C: Optional[Val],
+                pairing: Optional[dict] = None) -> str:
     if verdict.error_id == "LA03":
         return "count the inner dimensions"
     if verdict.error_id == "LA18":
         return "one side is a number, the other is an arrow"
     if S is not None and C is not None and S.is_matrix and C.is_matrix and S.obj.shape != C.obj.shape:
         return "the shapes on the two sides do not match"
+    # When the sweep is about to run, name the row and column it sweeps. "look
+    # again at the marked entry" made the student hunt for what was marked and
+    # why -- and it says nothing a box around the cell has not already said.
+    if pairing:
+        i, j = pairing["target"]
+        return f"this entry comes from row {i + 1} and column {j + 1}"
+    if _first_differing_cell(S, C):
+        cell = _first_differing_cell(S, C)
+        return f"check the entry in row {cell[0] + 1}, column {cell[1] + 1}"
     return "look again at the marked entry"
 
 
-def _pairing(verdict: Verdict, env: dict[str, Val], S: Optional[Val], C: Optional[Val]):
-    """LA01's pairing sweep: which row/column did that entry come from? (T3)"""
-    if verdict.error_id != "LA01":
-        return None
-    A, B = env.get("A"), env.get("B")
+def _pairing(verdict: Verdict, env: dict[str, Val], S: Optional[Val], C: Optional[Val],
+             operands: Optional[list[str]] = None):
+    """The sweep that shows WHERE a product entry came from: row i across the
+    left operand, column j down the right one, landing on the cell that differs.
+
+    This used to require error_id == "LA01" and both operands exactly 2x2, so a
+    3x3 product with one wrong entry -- a computation error, and the case the
+    animation is for -- got the static highlight and a generic caption instead.
+    The scene itself was never 2x2-only: it reads A.n_rows / B.n_cols and sweeps
+    whatever it is given. So the size test is gone and the operands are taken
+    from the step rather than assumed to be called A and B.
+
+    Still refused when more than one entry differs: two wrong cells are not one
+    mis-paired row, and sweeping a single cell would misrepresent that.
+    """
+    A = B = None
+    if operands and len(operands) >= 2:
+        A, B = env.get(operands[0]), env.get(operands[1])
+    if A is None or B is None:
+        A, B = env.get("A"), env.get("B")
+
     cell = _first_differing_cell(S, C)
-    if not (_is_2x2(A) and _is_2x2(B) and cell):
+    if cell is None or A is None or B is None:
         return None
+    if not (A.is_matrix and B.is_matrix and S is not None and S.is_matrix):
+        return None
+
+    # The sweep claims "row i of the left, column j of the right". That is only
+    # true if the shapes really compose that way.
+    if A.obj.shape[1] != B.obj.shape[0]:
+        return None
+    if S.obj.shape != (A.obj.shape[0], B.obj.shape[1]):
+        return None
+    if not (0 <= cell[0] < A.obj.shape[0] and 0 <= cell[1] < B.obj.shape[1]):
+        return None
+    if _differing_cell_count(S, C) != 1:
+        return None
+
+    a_rows, b_rows = _display(A), _display(B)
     s_rows, c_rows = _display(S), _display(C)
+    if not (a_rows and b_rows and s_rows and c_rows):
+        return None
     return {
-        "A_rows": _display(A), "B_rows": _display(B),
+        "A_rows": a_rows, "B_rows": b_rows,
         "target": cell,
         "student_entry": s_rows[cell[0]][cell[1]],
         "correct_entry": c_rows[cell[0]][cell[1]],
-        "wrong_source": "row",
+        # Only LA01 means "you ran along a row where a column belonged". For
+        # any other slip we know WHERE the entry came from but not how they
+        # got it wrong, and the scene must not invent a path.
+        "wrong_source": "row" if verdict.error_id == "LA01" else None,
     }
+
+
+def _differing_cell_count(S: Optional[Val], C: Optional[Val]) -> int:
+    a, b = _rows(S), _rows(C)
+    if not a or not b:
+        return 0
+    n = 0
+    for i in range(min(len(a), len(b))):
+        for j in range(min(len(a[i]), len(b[i]))):
+            if abs(a[i][j] - b[i][j]) > 1e-9:
+                n += 1
+    return n
 
 
 # --------------------------------------------------------------------------

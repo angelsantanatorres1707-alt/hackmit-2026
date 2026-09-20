@@ -166,7 +166,13 @@ class StaticStepHighlight(ParamScene):
                                int(pairing.get("target", [0, 0])[1])],
                     "student_entry": str(pairing.get("student_entry", "?"))[:6],
                     "correct_entry": str(pairing.get("correct_entry", "?"))[:6],
-                    "wrong_source": str(pairing.get("wrong_source", "row")),
+                    # NOT str(pairing.get(..., "row")): the key is present and
+                    # None when we do not know how they got the entry wrong, so
+                    # the default never fires and str(None) is "None" -- a
+                    # truthy string that replayed a mis-pairing anyway.
+                    "wrong_source": (pairing.get("wrong_source")
+                                     if pairing.get("wrong_source") in ("row", "col")
+                                     else None),
                 }
                 pr["target"][0] = max(0, min(len(pr["A_rows"]) - 1, pr["target"][0]))
                 pr["target"][1] = max(0, min(len(pr["B_rows"][0]) - 1, pr["target"][1]))
@@ -364,7 +370,23 @@ class StaticStepHighlight(ParamScene):
                   *land, run_time=0.7)
 
         # -- 4.0 / 2.0  student pairing: the second sweep runs ACROSS ---
-        if pr["wrong_source"] == "col":
+        #
+        # Only when we actually know they mis-paired. This replay asserts "you
+        # ran along a row where a column belonged", which is LA01's story. A
+        # plain arithmetic slip is not that: the pairing was right and the sum
+        # was wrong, and drawing the sweep anyway would tell the student they
+        # made a mistake they did not make. wrong_source is None in that case
+        # and the correct sweep above has already shown where the entry comes
+        # from; only their value is put up beside it.
+        replay = pr.get("wrong_source")
+        if not replay:
+            bad = T(pr["student_entry"], font_size=28, color=STUDENT).move_to(cell)
+            bad.set_z_index(Z_FLASH)
+            ghost = good.copy().set_color(GHOST).scale(0.85)
+            ghost.next_to(result, np.array([0.0, 1.0, 0.0]), buff=0.22)
+            ghost.shift(np.array([cell[0] - result.get_center()[0], 0.0, 0.0]))
+            self.play(good.animate.become(ghost), FadeIn(bad, scale=1.6), run_time=0.7)
+        elif replay == "col":
             s1 = self._sweep(A.cell_center(0, i), A.cell_center(A.n_rows - 1, i),
                              STUDENT)
             s2 = self._sweep(B.cell_center(0, j), B.cell_center(B.n_rows - 1, j),
@@ -375,16 +397,17 @@ class StaticStepHighlight(ParamScene):
             jj = min(j, B.n_rows - 1)
             s2 = self._sweep(B.cell_center(jj, 0),
                              B.cell_center(jj, B.n_cols - 1), STUDENT)
-        self.play(MoveAlongPath(s1[0], s1[1]), MoveAlongPath(s2[0], s2[1]),
-                  FadeIn(s1[2]), FadeIn(s2[2]), run_time=1.3)
-        ghost = good.copy().set_color(GHOST).scale(0.85)
-        ghost.next_to(result, np.array([0.0, 1.0, 0.0]), buff=0.22)
-        ghost.shift(np.array([cell[0] - result.get_center()[0], 0.0, 0.0]))
-        bad = T(pr["student_entry"], font_size=28, color=STUDENT).move_to(cell)
-        bad.set_z_index(Z_FLASH)
-        self.play(good.animate.become(ghost), FadeIn(bad, scale=1.6),
-                  FadeOut(s1[0]), FadeOut(s2[0]), FadeOut(s1[2]), FadeOut(s2[2]),
-                  run_time=0.7)
+        if replay:
+            self.play(MoveAlongPath(s1[0], s1[1]), MoveAlongPath(s2[0], s2[1]),
+                      FadeIn(s1[2]), FadeIn(s2[2]), run_time=1.3)
+            ghost = good.copy().set_color(GHOST).scale(0.85)
+            ghost.next_to(result, np.array([0.0, 1.0, 0.0]), buff=0.22)
+            ghost.shift(np.array([cell[0] - result.get_center()[0], 0.0, 0.0]))
+            bad = T(pr["student_entry"], font_size=28, color=STUDENT).move_to(cell)
+            bad.set_z_index(Z_FLASH)
+            self.play(good.animate.become(ghost), FadeIn(bad, scale=1.6),
+                      FadeOut(s1[0]), FadeOut(s2[0]), FadeOut(s1[2]), FadeOut(s2[2]),
+                      run_time=0.7)
 
         # -- 6.0 / 1.0  the two candidates, boxed -----------------------
         box = DashedVMobject(
