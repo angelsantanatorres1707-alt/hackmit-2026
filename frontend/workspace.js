@@ -540,7 +540,6 @@
   }
 
   function setMode(m) {
-    $('#mode-label').textContent = 'mode :: ' + m;
     ['text', 'voice', 'camera'].forEach(function (k) {
       var b = $('#mode-' + k);
       b.classList.toggle('is-on', k === m);
