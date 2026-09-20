@@ -695,10 +695,11 @@
     var box = $('#ws-warnings');
     box.textContent = '';
 
+    // The substitution line comes from the server or not at all: it is off by
+    // default there (SHOW_FIXTURE_BANNER=1 restores it), and a second copy
+    // invented here put it back on screen whatever the server had decided.
+    // job.photo_substituted still styles it loud when the server does send it.
     var rows = (job.warnings || []).slice();
-    if (job.photo_substituted && !rows.length) {
-      rows.push('Your photo was not read. What follows is a bundled sample, not your work.');
-    }
     if (!rows.length) { box.hidden = true; return; }
 
     box.hidden = false;

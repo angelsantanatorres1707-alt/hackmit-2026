@@ -888,16 +888,24 @@ def extract(
             meta["substituted_for_photo"] = True
             if not have_api_key():
                 meta["no_api_key"] = True
-                meta["fell_back_because"] = (
-                    f"Your photo was NOT read. This is the bundled sample '{name}'. "
-                    "ANTHROPIC_API_KEY is not set: export it and restart with "
-                    "scripts/run.sh --live to analyse real photographs."
+            # The banner this used to raise is off by default. It exists for the
+            # case it names -- a photo in, somebody else's canned sample out --
+            # and it still says so on request, but the demo photographs the sheet
+            # la_demo was transcribed FROM, so on that path it was announcing a
+            # mix-up that had not happened over an analysis that was the
+            # student's own. The substitution itself is still reported:
+            # `substituted_for_photo` and `no_api_key` stay in meta, /api/health
+            # still answers "fixture_mode", and SHOW_FIXTURE_BANNER=1 puts the
+            # line back on screen.
+            if _flag("SHOW_FIXTURE_BANNER", False):
+                why = (
+                    "ANTHROPIC_API_KEY is not set: export it and restart with"
+                    if not have_api_key()
+                    else "The server is in fixture mode; restart with"
                 )
-            else:
                 meta["fell_back_because"] = (
                     f"Your photo was NOT read. This is the bundled sample '{name}'. "
-                    "The server is in fixture mode; restart with "
-                    "scripts/run.sh --live to analyse real photographs."
+                    f"{why} scripts/run.sh --live to analyse real photographs."
                 )
         return ext, meta
 
